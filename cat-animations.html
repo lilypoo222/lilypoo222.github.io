@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat Animations</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --ink: #111111;
+      --muted: #6b6b6b;
+      --chip: #f1f1f1;
+      --chip-hover: #e6e6e6;
+    }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
+    canvas { display: block; }
+    #states {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+      width: max-content; max-width: calc(100% - 32px);
+    }
+    #states button {
+      font: inherit; font-size: 14px; font-weight: 600;
+      padding: 8px 14px; border: 0; border-radius: 999px;
+      background: var(--chip); color: var(--ink); cursor: pointer;
+    }
+    #states button:hover { background: var(--chip-hover); }
+    #states button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+    #states button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    #loading {
+      position: fixed; inset: 0; margin: 0; display: grid; place-items: center;
+      color: var(--muted); font-size: 14px;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "delaunator": "https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm"
+      }
+    }
+  </script>
+</head>
+<body>
+<nav id="states" aria-label="Animation"></nav>
+<p id="loading">Building the cat…</p>
+<script type="module">
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+import Delaunator from 'delaunator';
+
+// Vector source: Figma "Cat Character" > frame "USE THIS CLAUDE" (same paths as assets/images/cat.svg).
+// Kept in raw frame coordinates (0 0 600 640) so the parts line up exactly as designed.
+const CAT_SVG = `
+<svg width="600" height="640" viewBox="0 0 600 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="cat">
+<path id="Tail" d="M232.643 505.468C236.828 509.653 241.924 512.743 247.933 514.739C253.497 516.587 254.55 522.739 248.693 522.503C237.352 522.047 225.908 516.169 217.866 510.437C214.388 507.958 214.381 502.979 217.542 500.106C220.397 497.51 224.789 497.614 227.518 500.343L232.643 505.468Z" fill="black" stroke="black" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Body" d="M260.143 548L262.143 472V432H334.143V472L336.143 548C336.143 565.333 330.809 574 320.143 574C310.809 574 306.143 566.667 306.143 552C300.809 546.667 295.476 546.667 290.143 552C290.143 566.667 285.476 574 276.143 574C265.476 574 260.143 565.333 260.143 548Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<path id="Arm Up L" d="M223.605 430.792C238.85 435.782 257.19 444.607 276.639 448.776L260.315 483.5C249.405 476.907 225.902 462.85 210.521 451.975C206.478 449.117 202.469 445.783 200.787 441.127C199.242 436.85 200.315 433.552 204.005 431.235C209.752 427.626 217.156 428.681 223.605 430.792Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<path id="Arm Up R" d="M372.782 430.792C357.538 435.782 339.198 444.607 319.748 448.776L336.073 483.5C346.983 476.907 370.485 462.85 385.867 451.975C389.909 449.117 393.919 445.783 395.6 441.127C397.146 436.85 396.073 433.552 392.382 431.235C386.635 427.626 379.232 428.681 372.782 430.792Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<g id="Belly">
+<path id="Vector" d="M309.422 533.139C320.757 530.076 326.018 513.062 321.173 495.138C316.328 477.214 303.211 465.168 291.877 468.232C280.542 471.295 275.281 488.309 280.126 506.233C284.972 524.157 298.088 536.203 309.422 533.139Z" fill="white" stroke="black" stroke-width="5"/>
+<path id="Vector_2" d="M281.799 479.955C281.508 478.889 280.408 478.263 279.343 478.555C278.278 478.848 277.651 479.948 277.942 481.014L279.871 480.484L281.799 479.955ZM290.763 527.851C291.054 528.917 292.154 529.543 293.219 529.251C294.284 528.958 294.912 527.858 294.62 526.792L292.691 527.322L290.763 527.851ZM279.871 480.484L277.942 481.014L290.763 527.851L292.691 527.322L294.62 526.792L281.799 479.955L279.871 480.484Z" fill="black"/>
+<path id="Vector_3" d="M285.796 472.758L301.823 532.049" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_4" d="M292.18 467.707L309.677 532.435" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_5" d="M299.457 468.9L314.994 526.378" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_6" d="M310.718 475.158C310.43 474.092 309.332 473.461 308.266 473.749C307.199 474.037 306.568 475.135 306.856 476.201L308.787 475.68L310.718 475.158ZM318.254 518.411C318.542 519.477 319.64 520.109 320.706 519.821C321.773 519.533 322.404 518.435 322.116 517.369L320.185 517.89L318.254 518.411ZM308.787 475.68L306.856 476.201L318.254 518.411L320.185 517.89L322.116 517.369L310.718 475.158L308.787 475.68Z" fill="black"/>
+</g>
+<g id="Head">
+<path d="M137.493 92.2036C140.147 80.7307 154.469 77.2375 162.437 85.9085L212.143 140C269.476 129.333 328.81 127.333 390.143 134L438.666 94.4503C448.465 86.4636 463.524 93.4394 464.637 106.032C468.982 155.179 481.242 204.155 480.143 258C478.143 382 398.143 444 298.143 444C190.143 444 122.143 384 120.143 266C118.994 205.097 124.777 147.165 137.493 92.2036Z" fill="black"/>
+<path d="M212.143 140L162.437 85.9085C154.469 77.2375 140.147 80.7307 137.493 92.2036C124.777 147.165 118.994 205.097 120.143 266C122.143 384 190.143 444 298.143 444C398.143 444 478.143 382 480.143 258C481.242 204.155 468.982 155.179 464.637 106.032C463.524 93.4394 448.465 86.4636 438.666 94.4503L390.143 134M212.143 140C269.476 129.333 328.81 127.333 390.143 134M212.143 140C204.643 141.395 185.643 150.5 176.143 155.5M390.143 134L411.143 140" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path id="Stitches" d="M284.643 123.5L279.143 162M300.143 114.5V160M317.643 120.5L321.143 160" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="Eye L">
+<path id="Vector_7" d="M204.129 319.612C240.432 329.371 276.335 313.203 284.319 283.5C292.304 253.798 269.347 221.808 233.043 212.049C196.74 202.29 160.837 218.458 152.853 248.161C144.868 277.863 167.825 309.853 204.129 319.612Z" fill="white" stroke="black" stroke-width="8"/>
+<path id="Vector_8" d="M209.483 299.693C233.686 306.199 257.381 296.312 262.408 277.61C267.435 258.909 251.891 238.474 227.689 231.968C203.486 225.462 179.791 235.349 174.764 254.051C169.736 272.752 185.281 293.187 209.483 299.693Z" fill="#F7E814" stroke="black" stroke-width="5.15658"/>
+<path id="Vector_9" d="M193.965 236.252L182.453 279.078" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_10" d="M204.321 233.482L190.024 286.666" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_11" d="M214.061 233.004L198.212 291.964" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_12" d="M223.373 234.118L206.827 295.669" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_13" d="M232.283 236.727L215.844 297.879" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_14" d="M240.818 240.73L225.236 298.695" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_15" d="M248.872 246.526L235.11 297.718" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_16" d="M256.282 254.712L245.627 294.351" stroke="black" stroke-width="4" stroke-linecap="round"/>
+</g>
+<g id="Eye R">
+<path id="Vector_17" d="M403.952 315.929C441.518 301.478 462.386 264.846 450.562 234.11C438.738 203.374 398.699 190.173 361.133 204.625C323.567 219.076 302.699 255.708 314.523 286.444C326.347 317.18 366.386 330.381 403.952 315.929Z" fill="white" stroke="black" stroke-width="8"/>
+<path id="Vector_18" d="M396.022 295.317C421.066 285.683 435.333 262.184 427.889 242.832C420.444 223.48 394.106 215.602 369.062 225.237C344.018 234.871 329.751 258.369 337.196 277.722C344.641 297.074 370.978 304.952 396.022 295.317Z" fill="#9155E4" stroke="black" stroke-width="5.52115"/>
+<path id="Vector_19" d="M342.585 250.211L359.633 294.527" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_20" d="M349.799 241.284L370.97 296.318" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_21" d="M357.924 234.727L381.395 295.739" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_22" d="M366.684 229.819L391.186 293.51" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_23" d="M376.039 226.457L400.382 289.736" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_24" d="M385.949 224.538L409.023 284.519" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_25" d="M396.572 224.473L416.951 277.446" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_26" d="M408.147 226.883L423.927 267.901" stroke="black" stroke-width="4" stroke-linecap="round"/>
+</g>
+<path id="Mouth" d="M285.143 360L295.396 348.958C296.909 347.329 299.46 347.246 301.076 348.774L316.643 363.5" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>
+`;
+
+// How it's built:
+// 1. Each part's 2D outline is inflated into a full, rounded volume (a soap-bubble surface:
+//    round outlines become balls, long ones become round tubes). Head-on it keeps the design's outline.
+// 2. All parts are blended into ONE surface with soft fillets where they meet (smooth union),
+//    like a sculpted game character, so ears and limbs grow out of the head and body.
+// 3. The painted details are wrapped onto that surface, and the idle animation bends it with bones.
+//
+//   zCenter: where the part's middle sits front-to-back
+//   depthScale: thickness (1 = ball for round shapes; ~0.7 = round cross-section for long shapes)
+//   blend: how soft the join to the rest of the body is (SVG units)
+//   bone: which animated part moves it
+const PARTS = {
+  body:  { zCenter: 0,   depthScale: 0.8,  spacing: 2,   bone: 'body' },
+  head:  { zCenter: 0,   depthScale: 0.85, spacing: 2.5, bone: 'head', blend: 14, inset: 3 },
+  earL:  { zCenter: 0,   depthScale: 0.5,  spacing: 1.5, bone: 'head', blend: 18 },
+  earR:  { zCenter: 0,   depthScale: 0.5,  spacing: 1.5, bone: 'head', blend: 18 },
+  armL:  { zCenter: 0,   depthScale: 0.75, spacing: 1.5, bone: 'armL', blend: 12 },
+  armR:  { zCenter: 0,   depthScale: 0.75, spacing: 1.5, bone: 'armR', blend: 12 },
+  tail:  { zCenter: -12, depthScale: 0.8,  spacing: 1,   bone: 'tail', blend: 8 },
+};
+const SOLID_PATHS = { 'Body': 'body', 'Head': 'head', 'Arm Up L': 'armL', 'Arm Up R': 'armR', 'Tail': 'tail' };
+
+// Ears are cut from the head outline at their inner notch and a point on the side of the head
+// (SVG coordinates from the design); `sink` pushes each ear's base down into the head.
+const EARS = {
+  left:  { notch: [212, 140], tip: [145, 82], side: [125, 178], sink: [28, 22] },
+  right: { notch: [390, 134], tip: [455, 88], side: [473, 172], sink: [-28, 22] },
+};
+
+const PIVOTS = {
+  head: [298, 440], tail: [256, 516], armL: [262, 452], armR: [336, 452],   // shoulders
+  legL: [283, 538], legR: [313, 538],   // hips
+};
+
+// ---------- 2D geometry helpers ----------
+function signedArea(poly) {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+
+// Move the outline outward (positive) or inward (negative) along its normals.
+function offsetOutline(poly, amount) {
+  if (!amount) return poly;
+  const sign = signedArea(poly) > 0 ? 1 : -1;
+  const n = poly.length;
+  return poly.map(([x, y], i) => {
+    const [px, py] = poly[(i - 1 + n) % n], [nx, ny] = poly[(i + 1) % n];
+    let tx = nx - px, ty = ny - py;
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len; ty /= len;
+    return [x + ty * amount * sign, y - tx * amount * sign];
+  });
+}
+
+function insidePoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function distToPoly(x, y, poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    const ex = ax + t * dx - x, ey = ay + t * dy - y;
+    best = Math.min(best, ex * ex + ey * ey);
+  }
+  return Math.sqrt(best);
+}
+
+function bounds(poly) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of poly) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function shapeOutline(shape, spacing) {
+  return shape.getSpacedPoints(Math.max(8, Math.ceil(shape.getLength() / spacing))).slice(0, -1).map((v) => [v.x, v.y]);
+}
+
+function appendLine(out, [x1, y1], spacing) {
+  const [x0, y0] = out[out.length - 1];
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing));
+  for (let k = 1; k <= steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+}
+
+// Add evenly spaced points along a straight closing edge (last point back to the first).
+function closeWithLine(arc, spacing) {
+  const out = arc.slice();
+  appendLine(out, arc[0], spacing);
+  out.pop();
+  return out;
+}
+
+// Even triangle mesh filling an outline: boundary points first, then a staggered interior lattice.
+function latticeMesh(poly, spacing) {
+  const { minX, minY, maxX, maxY } = bounds(poly);
+  const pts = poly.map((p) => p.slice());
+  const rowH = spacing * 0.866;
+  for (let row = 0, y = minY + rowH / 2; y < maxY; row++, y += rowH) {
+    for (let x = minX + (row % 2 ? spacing / 2 : 0); x < maxX; x += spacing) {
+      if (insidePoly(x, y, poly) && distToPoly(x, y, poly) >= spacing * 0.5) pts.push([x, y]);
+    }
+  }
+  const tri = Delaunator.from(pts).triangles;
+  const faces = [];
+  for (let i = 0; i < tri.length; i += 3) {
+    const a = tri[i], b = tri[i + 1], c = tri[i + 2];
+    const cx = (pts[a][0] + pts[b][0] + pts[c][0]) / 3;
+    const cy = (pts[a][1] + pts[b][1] + pts[c][1]) / 3;
+    if (insidePoly(cx, cy, poly)) faces.push([a, b, c]);
+  }
+  return { pts, faces };
+}
+
+// Split one ear off the head outline, cutting from the notch to a point on the side of the head.
+function splitEar(poly, { notch, tip, side, sink }, spacing) {
+  const nearest = ([px, py]) => {
+    let best = 0, bd = Infinity;
+    poly.forEach(([x, y], i) => { const d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+  const n = poly.length;
+  const arc = (a, b) => { const out = []; for (let i = a; ; i = (i + 1) % n) { out.push(poly[i]); if (i === b) break; } return out; };
+  const iN = nearest(notch), iS = nearest(side), tipPt = poly[nearest(tip)];
+  let ear = arc(iN, iS), rest = arc(iS, iN);
+  if (!ear.includes(tipPt)) [ear, rest] = [rest, ear];
+
+  const [ax, ay] = ear[0], [bx, by] = ear[ear.length - 1];
+  const earPoly = ear.slice();
+  appendLine(earPoly, [(ax + bx) / 2 + sink[0], (ay + by) / 2 + sink[1]], spacing);
+  return { ear: closeWithLine(earPoly, spacing), rest: closeWithLine(rest, spacing) };
+}
+
+// ---------- inflated part: half-thickness T(x, y) ----------
+// Soap-bubble surface: solve  ∇²h = -4  with h = 0 on the outline (cotangent Laplacian, SOR).
+// For a circle of radius R this gives h = R² - r², so sqrt(h) is exactly a sphere.
+function inflate(poly, { depthScale, spacing }) {
+  const { pts, faces } = latticeMesh(poly, spacing);
+  const nb = poly.length, N = pts.length;
+
+  const nbrs = Array.from({ length: N }, () => new Map());
+  const area = new Float64Array(N);
+  const cot = (o, p, q) => {
+    const ux = pts[p][0] - pts[o][0], uy = pts[p][1] - pts[o][1];
+    const vx = pts[q][0] - pts[o][0], vy = pts[q][1] - pts[o][1];
+    return (ux * vx + uy * vy) / Math.abs(ux * vy - uy * vx || 1e-9);
+  };
+  const addW = (i, j, w) => {
+    nbrs[i].set(j, (nbrs[i].get(j) || 0) + w);
+    nbrs[j].set(i, (nbrs[j].get(i) || 0) + w);
+  };
+  for (const [a, b, c] of faces) {
+    addW(b, c, cot(a, b, c) / 2);
+    addW(c, a, cot(b, c, a) / 2);
+    addW(a, b, cot(c, a, b) / 2);
+    const A = Math.abs((pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[b][1] - pts[a][1]) * (pts[c][0] - pts[a][0])) / 2;
+    area[a] += A / 3; area[b] += A / 3; area[c] += A / 3;
+  }
+  // Flatten the neighbour lists into typed arrays: the solver loop runs millions of times.
+  const start = new Int32Array(N + 1);
+  nbrs.forEach((m, i) => { start[i + 1] = start[i] + m.size; });
+  const nbrIdx = new Int32Array(start[N]), nbrW = new Float64Array(start[N]), wSum = new Float64Array(N);
+  nbrs.forEach((m, i) => {
+    let s = start[i];
+    for (const [j, w] of m) { nbrIdx[s] = j; nbrW[s] = Math.max(w, 0); wSum[i] += nbrW[s]; s++; }
+  });
+  const h = new Float64Array(N);
+  const iters = Math.ceil(4 * Math.sqrt(N));
+  for (let it = 0; it < iters; it++) {
+    for (let i = nb; i < N; i++) {
+      if (wSum[i] <= 0) continue;
+      let sh = 0;
+      for (let s = start[i]; s < start[i + 1]; s++) sh += nbrW[s] * h[nbrIdx[s]];
+      h[i] += 1.9 * ((sh + 4 * area[i]) / wSum[i] - h[i]);
+    }
+  }
+  const T = Array.from(h, (v) => depthScale * Math.sqrt(Math.max(v, 0)));
+
+  // Point lookup: interpolated half-thickness at (x, y), or null outside the outline.
+  const cell = spacing * 3;
+  const buckets = new Map();
+  const key = (i, j) => i * 100003 + j;
+  faces.forEach((f, fi) => {
+    const xs = f.map((v) => pts[v][0]), ys = f.map((v) => pts[v][1]);
+    for (let i = Math.floor(Math.min(...xs) / cell); i <= Math.floor(Math.max(...xs) / cell); i++) {
+      for (let j = Math.floor(Math.min(...ys) / cell); j <= Math.floor(Math.max(...ys) / cell); j++) {
+        const k = key(i, j);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(fi);
+      }
+    }
+  });
+  return (x, y) => {
+    for (const fi of buckets.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []) {
+      const [a, b, c] = faces[fi];
+      const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c];
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+      const u = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / d;
+      const v = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d;
+      const w = 1 - u - v;
+      if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+      return u * T[a] + v * T[b] + w * T[c];
+    }
+    return null;
+  };
+}
+
+// ---------- 3D field per part ----------
+// Raster of the part's half-thickness inside its outline and (negative) distance outside,
+// so  f(x, y, z) = |z - zCenter| - T(x, y)  is < 0 inside the part and > 0 outside.
+const RASTER = 1.5, MARGIN = 30;
+function partField(poly, cfg) {
+  const thickness = inflate(poly, cfg);
+  const b = bounds(poly);
+  const x0 = b.minX - MARGIN, y0 = b.minY - MARGIN;
+  const nx = Math.ceil((b.maxX - b.minX + 2 * MARGIN) / RASTER) + 1;
+  const ny = Math.ceil((b.maxY - b.minY + 2 * MARGIN) / RASTER) + 1;
+  const T = new Float32Array(nx * ny);
+  const inside = new Uint8Array(nx * ny);
+
+  // Scanline fill for inside/outside.
+  for (let j = 0; j < ny; j++) {
+    const y = y0 + j * RASTER;
+    const xs = [];
+    for (let i = 0, k = poly.length - 1; i < poly.length; k = i++) {
+      const [xi, yi] = poly[i], [xk, yk] = poly[k];
+      if ((yi > y) !== (yk > y)) xs.push(xi + ((y - yi) * (xk - xi)) / (yk - yi));
+    }
+    xs.sort((p, q) => p - q);
+    for (let s = 0; s + 1 < xs.length; s += 2) {
+      for (let i = Math.max(0, Math.ceil((xs[s] - x0) / RASTER)); i <= Math.min(nx - 1, Math.floor((xs[s + 1] - x0) / RASTER)); i++) inside[j * nx + i] = 1;
+    }
+  }
+
+  // Inside: inflated half-thickness. Outside: chamfer distance to the outline, negated.
+  const BIG = 1e6, D1 = RASTER, D2 = RASTER * Math.SQRT2;
+  const dist = new Float32Array(nx * ny);
+  for (let k = 0; k < nx * ny; k++) dist[k] = inside[k] ? 0 : BIG;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (i > 0) d = Math.min(d, dist[k - 1] + D1);
+    if (j > 0) d = Math.min(d, dist[k - nx] + D1);
+    if (i > 0 && j > 0) d = Math.min(d, dist[k - nx - 1] + D2);
+    if (i < nx - 1 && j > 0) d = Math.min(d, dist[k - nx + 1] + D2);
+    dist[k] = d;
+  }
+  for (let j = ny - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
+    const k = j * nx + i;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (i < nx - 1) d = Math.min(d, dist[k + 1] + D1);
+    if (j < ny - 1) d = Math.min(d, dist[k + nx] + D1);
+    if (i < nx - 1 && j < ny - 1) d = Math.min(d, dist[k + nx + 1] + D2);
+    if (i > 0 && j < ny - 1) d = Math.min(d, dist[k + nx - 1] + D2);
+    dist[k] = d;
+  }
+  // Store the SQUARED thickness (signed): it varies smoothly, even at the rim where the thickness
+  // itself rises steeply, so interpolating it and taking the square root afterwards gives a clean,
+  // round edge. A light blur then removes the faceting of the solver's triangle mesh.
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    if (inside[k]) { const t = thickness(x0 + i * RASTER, y0 + j * RASTER) ?? 0; T[k] = t * t; }
+    else { const d = Math.max(dist[k] - RASTER / 2, 0.01); T[k] = -d * d; }
+  }
+  const tmp = new Float32Array(nx * ny);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      tmp[k] = (T[k] * 2 + (i > 0 ? T[k - 1] : T[k]) + (i < nx - 1 ? T[k + 1] : T[k])) / 4;
+    }
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      T[k] = (tmp[k] * 2 + (j > 0 ? tmp[k - nx] : tmp[k]) + (j < ny - 1 ? tmp[k + nx] : tmp[k])) / 4;
+    }
+  }
+
+  const zc = cfg.zCenter;
+  return (x, y, z) => {
+    const fx = (x - x0) / RASTER, fy = (y - y0) / RASTER;
+    if (fx < 0 || fy < 0 || fx >= nx - 1 || fy >= ny - 1) return 1e3;
+    const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j, k = j * nx + i;
+    const s = (T[k] * (1 - tx) + T[k + 1] * tx) * (1 - ty) + (T[k + nx] * (1 - tx) + T[k + nx + 1] * tx) * ty;
+    return Math.abs(z - zc) - (s >= 0 ? Math.sqrt(s) : -Math.sqrt(-s));
+  };
+}
+
+// Polynomial smooth minimum: a soft, rounded join instead of a crease.
+function smin(a, b, k) {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * k * 0.25;
+}
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#ffffff');
+
+const camera = new THREE.PerspectiveCamera(30, 1, 10, 6000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.target.set(0, 255, 0);
+
+// Cartoon (cel) shading, like a 3D game character: flat colour where lit, one crisp shadow band.
+// The design's painted layers (eyes, belly, stitches, mouth) are drawn by the browser straight from
+// the SVG into a texture and projected onto the front of the surface, so they match the vector
+// artwork exactly and move with the body as it animates. Each expression is its own texture.
+const LIGHT_WORLD = new THREE.Vector3(-0.45, 0.7, 0.9).normalize();
+const lightDirView = { value: new THREE.Vector3() };
+
+const PAINT_BOX = { x: 115, y: 75, w: 375, h: 510 };   // SVG area covered by the paint textures
+const PAINT_PX_PER_UNIT = 5;
+const SOLID_IDS = ['Tail', 'Body', 'Arm Up L', 'Arm Up R'];
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Expressions. Paths are in the design's SVG coordinates.
+const MOUTH = {
+  // Figma frame 9:189 (arms down / idle)
+  idle: 'M285.143 360L298.143 346L316.643 363.5',
+  // Figma frame 9:95 (happy)
+  smile: 'M285.143 349.5C292.303 357.211 304.378 357.602 312.022 350.371L316.643 346',
+  // New: a small wavy pout
+  pout: 'M285 364C288.5 354.5 295 352.5 300.5 359.5C306 352.5 312.5 354.5 316 364',
+};
+// Figma frame 9:95: closed, happy eyes.
+const CLOSED_EYES = [
+  'M163.5 255C172.667 279.333 206.4 318.5 268 280.5',
+  'M440 243C432.167 268.333 399.5 311.4 331.5 281',
+];
+// New: anger mark (ikari / 💢) on the forehead, drawn as four curved brackets around a point.
+const ANGER_MARK = { x: 402, y: 172, r: 21, gap: 5 };
+function angerMarkPath({ x, y, r, gap }) {
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  return corners.map(([sx, sy]) =>
+    `M${x + sx * r} ${y + sy * gap}Q${x + sx * gap} ${y + sy * gap} ${x + sx * gap} ${y + sy * r}`).join('');
+}
+
+const FACES = {
+  idle:    { mouth: MOUTH.idle },
+  happy:   { mouth: MOUTH.smile, closedEyes: true },
+  mad:     { mouth: MOUTH.pout },
+  excited: { mouth: MOUTH.smile },
+};
+
+function onSilhouette(sub, poly, tolerance) {
+  return sub.getSpacedPoints(24).every((p) => distToPoly(p.x, p.y, poly) < tolerance);
+}
+
+function whiteStroke(doc, d, width = 8) {
+  const p = doc.createElementNS(SVG_NS, 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('stroke', 'white');
+  p.setAttribute('stroke-width', width);
+  p.setAttribute('stroke-linecap', 'round');
+  p.setAttribute('stroke-linejoin', 'round');
+  p.setAttribute('fill', 'none');
+  return p;
+}
+
+async function svgToTexture(svg) {
+  const w = Math.round(PAINT_BOX.w * PAINT_PX_PER_UNIT), h = Math.round(PAINT_BOX.h * PAINT_PX_PER_UNIT);
+  svg.setAttribute('viewBox', `${PAINT_BOX.x} ${PAINT_BOX.y} ${PAINT_BOX.w} ${PAINT_BOX.h}`);
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  await img.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = false;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return texture;
+}
+
+async function faceTexture({ mouth, closedEyes }) {
+  const doc = new DOMParser().parseFromString(CAT_SVG.trim(), 'image/svg+xml');
+  // Keep only the painted layers: drop the solid shapes and the black head fill.
+  for (const id of SOLID_IDS) doc.getElementById(id)?.remove();
+  doc.getElementById('Head').querySelector('path').remove();
+  // The white head outline: the pieces running along the silhouette only trim the head's edge
+  // (applied as the head's inset), so keep just the inner ear lines.
+  const outline = doc.getElementById('Head').querySelector('path');
+  const outlinePath = data.paths.find((p) => p.userData.node.parentNode.id === 'Head' && p.userData.style.fill === 'none');
+  const pieces = outline.getAttribute('d').split(/(?=M)/);
+  outline.setAttribute('d', pieces.filter((_, i) => !onSilhouette(outlinePath.subPaths[i], fields.headOutline, 6)).join(''));
+
+  doc.getElementById('Mouth').setAttribute('d', mouth);
+  if (closedEyes) {
+    const cat = doc.getElementById('cat');
+    doc.getElementById('Eye L').remove();
+    doc.getElementById('Eye R').remove();
+    for (const d of CLOSED_EYES) cat.appendChild(whiteStroke(doc, d));
+  }
+  return svgToTexture(doc.documentElement);
+}
+
+async function angerMarkTexture() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
+  const mark = whiteStroke(document, angerMarkPath(ANGER_MARK), 6);
+  mark.setAttribute('stroke', '#FF3B3B');
+  svg.appendChild(mark);
+  return svgToTexture(svg);
+}
+
+const TOON_VERTEX = `
+  #include <common>
+  #include <skinning_pars_vertex>
+  uniform vec4 uPaintBox;
+  varying vec3 vNormal;
+  varying vec2 vUv;
+  varying float vFront;
+  void main() {
+    // Paint is looked up from the rest pose, so it sticks to the surface while it moves.
+    vUv = (position.xy - uPaintBox.xy) / uPaintBox.zw;
+    vFront = smoothstep(0.05, 0.3, normalize(normal).z);
+    #include <beginnormal_vertex>
+    #include <skinbase_vertex>
+    #include <skinnormal_vertex>
+    #include <begin_vertex>
+    #include <skinning_vertex>
+    vNormal = normalize(normalMatrix * objectNormal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
+  }
+`;
+const TOON_FRAGMENT = `
+  uniform vec3 uBaseLit;
+  uniform vec3 uBaseShadow;
+  uniform float uPaintShadow;
+  uniform sampler2D uFaceFrom;
+  uniform sampler2D uFaceTo;
+  uniform float uFaceMix;
+  uniform sampler2D uMark;
+  uniform float uMarkAlpha;
+  uniform float uMarkScale;
+  uniform vec2 uMarkCenter;
+  uniform vec3 uLightDir;
+  varying vec3 vNormal;
+  varying vec2 vUv;
+  varying float vFront;
+  void main() {
+    vec3 n = normalize(vNormal);
+    if (!gl_FrontFacing) n = -n;
+    float ndl = dot(n, uLightDir);
+    // Hard cartoon edge, antialiased to about a pixel so it stays clean.
+    float aa = max(fwidth(ndl), 0.01);
+    float lit = smoothstep(-aa, aa, ndl);
+
+    // Cross-fade between expressions, then lay the (pulsing) anger mark on top.
+    vec4 paint = mix(texture2D(uFaceFrom, vUv), texture2D(uFaceTo, vUv), uFaceMix);
+    vec4 mark = texture2D(uMark, (vUv - uMarkCenter) / uMarkScale + uMarkCenter);
+    float ma = mark.a * uMarkAlpha;
+    paint = vec4(mix(paint.rgb, mark.rgb, ma), max(paint.a, ma));
+
+    float a = paint.a * vFront;
+    vec3 litColor = mix(uBaseLit, paint.rgb, a);
+    vec3 shadowColor = mix(uBaseShadow, paint.rgb * uPaintShadow, a);
+    gl_FragColor = vec4(mix(shadowColor, litColor, lit), 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+// Black parts: two flat tones (very dark grey where lit, pure black in shadow).
+function catMaterial(face, mark) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uBaseLit: { value: new THREE.Color('#1f1f1f') },
+      uBaseShadow: { value: new THREE.Color('#000000') },
+      uPaintShadow: { value: 0.72 },
+      uFaceFrom: { value: face },
+      uFaceTo: { value: face },
+      uFaceMix: { value: 1 },
+      uMark: { value: mark },
+      uMarkAlpha: { value: 0 },
+      uMarkScale: { value: 1 },
+      uMarkCenter: { value: new THREE.Vector2((ANGER_MARK.x - PAINT_BOX.x) / PAINT_BOX.w, (ANGER_MARK.y - PAINT_BOX.y) / PAINT_BOX.h) },
+      uPaintBox: { value: new THREE.Vector4(PAINT_BOX.x, PAINT_BOX.y, PAINT_BOX.w, PAINT_BOX.h) },
+      uLightDir: lightDirView,
+    },
+    vertexShader: TOON_VERTEX,
+    fragmentShader: TOON_FRAGMENT,
+  });
+}
+
+// Shadow ellipse from the design (#CCCCCC, rx 98.5), laid flat on the floor.
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 96).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: '#CCCCCC' })
+);
+shadow.scale.set(98.5, 1, 75);
+shadow.position.set(0.5, 0.1, 0);
+scene.add(shadow);
+
+// cat: world-space group (turntable sway + breathing, scaled from the feet).
+// svgRoot: flips SVG's y-down coordinates and puts the bottom of the feet (y 577) on the floor.
+const cat = new THREE.Group();
+scene.add(cat);
+const svgRoot = new THREE.Group();
+svgRoot.scale.y = -1;
+svgRoot.position.set(-298, 577, 0);
+cat.add(svgRoot);
+
+// ---------- build the parts' fields from the SVG ----------
+// The model is built in the arms-down pose (Figma frame 9:189, its idle). Happy Hop raises the
+// arms back to the design's "arms up" shape (frame 10:498) by rotating them at the shoulder.
+const ARMS_DOWN = {
+  'Arm Up L': 'M212.863 458.598C226.896 450.831 245.847 443.407 262.143 432V472C250.048 475.456 234.968 479.658 219.482 482.672C214.623 483.617 209.452 484.286 204.896 482.348C200.712 480.567 199.027 477.536 199.842 473.256C201.112 466.589 206.925 461.885 212.863 458.598Z',
+  'Arm Up R': 'M386.28 458.598C372.246 450.831 353.296 443.407 337 432V472C349.095 475.456 364.175 479.658 379.661 482.672C384.52 483.617 389.691 484.286 394.246 482.348C398.431 480.567 400.116 477.536 399.301 473.256C398.031 466.589 392.218 461.885 386.28 458.598Z',
+};
+const solidsDoc = new DOMParser().parseFromString(CAT_SVG.trim(), 'image/svg+xml');
+for (const [id, d] of Object.entries(ARMS_DOWN)) solidsDoc.getElementById(id).setAttribute('d', d);
+const solidData = new SVGLoader().parse(new XMLSerializer().serializeToString(solidsDoc));
+
+const data = new SVGLoader().parse(CAT_SVG);
+const fields = {};
+for (const path of solidData.paths) {
+  const node = path.userData.node;
+  const key = SOLID_PATHS[node.parentNode.id === 'Head' ? 'Head' : node.id];
+  const style = path.userData.style;
+  if (!key || style.fill === 'none' || style.fill === undefined) continue;
+  const cfg = PARTS[key];
+  const outline = style.stroke && style.stroke !== 'none' ? style.strokeWidth : 0;
+  const poly = offsetOutline(shapeOutline(SVGLoader.createShapes(path)[0], cfg.spacing), outline / 2 - (cfg.inset || 0));
+  if (key === 'head') {
+    const left = splitEar(poly, EARS.left, cfg.spacing);
+    const right = splitEar(left.rest, EARS.right, cfg.spacing);
+    fields.head = partField(right.rest, cfg);
+    fields.earL = partField(left.ear, PARTS.earL);
+    fields.earR = partField(right.ear, PARTS.earR);
+    fields.headOutline = poly;
+  } else {
+    fields[key] = partField(poly, cfg);
+  }
+}
+
+const BLEND_ORDER = ['head', 'earL', 'earR', 'armL', 'armR', 'tail'];
+const PART_KEYS = ['body', ...BLEND_ORDER];
+function catField(x, y, z) {
+  let f = fields.body(x, y, z);
+  for (const k of BLEND_ORDER) f = smin(f, fields[k](x, y, z), PARTS[k].blend);
+  return f;
+}
+
+// ---------- one continuous surface (marching cubes) ----------
+const BOX = { x0: 40, y0: 60, z0: -260, size: 540 };
+const RES = 180;
+const step = BOX.size / (RES - 1);
+const mc = new MarchingCubes(RES, new THREE.MeshBasicMaterial(), false, false, 400000);
+mc.isolation = 0;
+for (let zi = 0; zi < RES; zi++) {
+  const z = BOX.z0 + zi * step;
+  for (let yi = 0; yi < RES; yi++) {
+    const y = BOX.y0 + yi * step;
+    for (let xi = 0; xi < RES; xi++) {
+      mc.field[xi + yi * RES + zi * RES * RES] = -catField(BOX.x0 + xi * step, y, z);
+    }
+  }
+}
+mc.update();
+
+const vertexCount = mc.count;
+const half = RES / 2;
+const toSvg = (p, origin) => origin + (p * half + half) * step;
+const positions = new Float32Array(vertexCount * 3);
+const normals = new Float32Array(vertexCount * 3);
+const srcPos = mc.geometry.attributes.position.array;
+for (let v = 0; v < vertexCount; v++) {
+  positions[v * 3] = toSvg(srcPos[v * 3], BOX.x0);
+  positions[v * 3 + 1] = toSvg(srcPos[v * 3 + 1], BOX.y0);
+  positions[v * 3 + 2] = toSvg(srcPos[v * 3 + 2], BOX.z0);
+}
+mc.geometry.dispose();
+
+// Shading normals from the exact surface (not the coarse marching-cubes grid), so the toon
+// light/shadow edge runs smooth. Vertices repeat across triangles, so cache by position.
+const normalCache = new Map();
+for (let v = 0; v < vertexCount; v++) {
+  const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+  const k = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
+  let n = normalCache.get(k);
+  if (!n) {
+    const e = 1.5;
+    n = [
+      catField(x + e, y, z) - catField(x - e, y, z),
+      catField(x, y + e, z) - catField(x, y - e, z),
+      catField(x, y, z + e) - catField(x, y, z - e),
+    ];
+    const len = Math.hypot(...n) || 1;
+    n = n.map((c) => c / len);
+    normalCache.set(k, n);
+  }
+  normals.set(n, v * 3);
+}
+
+// ---------- bones: each vertex follows the part(s) it belongs to, blended near the joins ----------
+// The legs are part of the body outline in the design; below the hips they get their own bones.
+const BONES = ['body', 'head', 'armL', 'armR', 'tail', 'legL', 'legR'];
+const boneOf = { body: 'body', head: 'head', earL: 'head', earR: 'head', armL: 'armL', armR: 'armR', tail: 'tail' };
+const HIP_Y = [526, 548], LEG_SPLIT_X = 298;
+const smooth = (a, b, v) => { const s = Math.min(Math.max((v - a) / (b - a), 0), 1); return s * s * (3 - 2 * s); };
+const skinIndex = new Uint16Array(vertexCount * 4);
+const skinWeight = new Float32Array(vertexCount * 4);
+// Each vertex belongs to the part it is inside (or closest to). Limbs hand over to the body
+// across a short, smooth zone at the joint, so bending them stays clean.
+const SHOULDER_X = { armL: 262, armR: 334 };
+const TAIL_ROOT_X = 256;
+const BONE_INDEX = Object.fromEntries(BONES.map((b, i) => [b, i]));
+for (let v = 0; v < vertexCount; v++) {
+  const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+  let primary = 'body', best = Infinity;
+  for (const k of PART_KEYS) {
+    const f = fields[k](x, y, z);
+    if (f < best) { best = f; primary = k; }
+  }
+  const w = new Array(BONES.length).fill(0);
+  const bone = boneOf[primary];
+  if (bone === 'armL' || bone === 'armR') {
+    const out = bone === 'armL' ? SHOULDER_X.armL - x : x - SHOULDER_X.armR;
+    const a = smooth(-3, 12, out);
+    w[BONE_INDEX[bone]] = a;
+    w[0] = 1 - a;
+  } else if (bone === 'tail') {
+    const a = smooth(-2, 8, TAIL_ROOT_X - x);
+    w[BONE_INDEX.tail] = a;
+    w[0] = 1 - a;
+  } else {
+    w[BONE_INDEX[bone]] = 1;
+  }
+  // Neck: body and shoulder surface right under the head follows the head a little.
+  if (bone !== 'head') {
+    const nearHead = smooth(10, 0, fields.head(x, y, z)) * 0.8;
+    for (let i = 0; i < w.length; i++) w[i] *= 1 - nearHead;
+    w[BONE_INDEX.head] += nearHead;
+  }
+  // Hand the lower body over to the leg on that side.
+  const legShare = w[0] * smooth(HIP_Y[0], HIP_Y[1], y);
+  const right = smooth(LEG_SPLIT_X - 4, LEG_SPLIT_X + 4, x);
+  w[0] -= legShare;
+  w[BONE_INDEX.legL] += legShare * (1 - right);
+  w[BONE_INDEX.legR] += legShare * right;
+
+  const order = w.map((val, i) => [val, i]).sort((a, b) => b[0] - a[0]).slice(0, 4);
+  const sum = order.reduce((s, [val]) => s + val, 0);
+  order.forEach(([val, i], slot) => { skinIndex[v * 4 + slot] = i; skinWeight[v * 4 + slot] = val / sum; });
+}
+
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+geometry.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4));
+geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+
+const faces = {};
+for (const [name, face] of Object.entries(FACES)) faces[name] = await faceTexture(face);
+const body = new THREE.SkinnedMesh(geometry, catMaterial(faces.idle, await angerMarkTexture()));
+body.frustumCulled = false;
+svgRoot.add(body);
+
+const rootBone = new THREE.Bone();
+const bones = [rootBone];
+const parts = {};
+for (const name of BONES.slice(1)) {
+  const [px, py] = PIVOTS[name];
+  const bone = new THREE.Bone();
+  bone.position.set(px, py, 0);
+  rootBone.add(bone);
+  bones.push(bone);
+  parts[name] = { pivot: bone, rest: [px, py] };
+}
+body.add(rootBone);
+svgRoot.updateMatrixWorld(true);
+body.bind(new THREE.Skeleton(bones));
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  // Half-height / half-width to keep in view (the head sticks out toward the camera, so pad generously).
+  const fitH = 340 / Math.tan(halfFov);
+  const fitW = 300 / (Math.tan(halfFov) * camera.aspect);
+  const dist = Math.max(fitH, fitW);
+  camera.position.set(0, 255, dist);
+  controls.minDistance = dist * 0.5;
+  controls.maxDistance = dist * 2;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- animation states ----------
+// Each state is a function of time (seconds since it started) returning a pose.
+// Pose units: y / headY / leg lifts in SVG units (the design's pixels; y up for the jump),
+// rotations in radians, squash as a height multiplier (volume is kept).
+const ARM_UP = 0.56;   // shoulder rotation from "arms down" (frame 9:189, the rest pose) to the design's "arms up" (frame 10:498)
+
+const REST = {
+  y: 0, squash: 1, turn: 0, lean: 0,
+  headY: 0, headTilt: 0,
+  armL: 0, armR: 0, armLFwd: 0, armRFwd: 0,
+  legLx: 0, legLz: 0, legLy: 0, legRx: 0, legRz: 0, legRy: 0,
+  tail: 0, markAlpha: 0, markScale: 1,
+};
+
+const TAU = Math.PI * 2;
+const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
+const easeOut = (v) => 1 - (1 - v) ** 3;
+const easeIn = (v) => v ** 3;
+const easeInOut = (v) => (v < 0.5 ? 4 * v ** 3 : 1 - (-2 * v + 2) ** 3 / 2);
+const span = (t, a, b) => clamp01((t - a) / (b - a));   // 0 → 1 as t goes from a to b
+const lerp = (a, b, v) => a + (b - a) * v;
+
+// Piecewise-linear keyframes: [[time, value], ...]
+function keyframes(frames, t) {
+  for (let i = 1; i < frames.length; i++) {
+    const [t1, v1] = frames[i];
+    if (t <= t1) {
+      const [t0, v0] = frames[i - 1];
+      return lerp(v0, v1, (t - t0) / (t1 - t0));
+    }
+  }
+  return frames[frames.length - 1][1];
+}
+
+// The hop pattern from the Figma motion on frame 9:95 ("cat" node): a 2 s loop with three
+// 24 px hops in the first third (keyframes at 0, 4.863, 10.293, 17.15, 22.678, 28.759, 33.956 %).
+const HOP_LOOP = 2;
+const HOPS = [0, 4.863, 10.293, 17.15, 22.678, 28.759, 33.956, 100].map((p, i) => [p / 100 * HOP_LOOP, [0, 24, 0, 24, 0, 24, 0, 0][i]]);
+
+const STATES = {
+  // Idle: the original idle, with the arms down at the sides (frame 9:189).
+  idle: {
+    label: 'Idle',
+    face: 'idle',
+    pose(t) {
+      const breath = Math.sin(t * 2.2);
+      const armSway = Math.sin(t * 2.2 - 0.3) * 0.035;
+      return {
+        turn: Math.sin(t * 0.6) * 0.45,
+        squash: 1 + breath * 0.008,
+        headY: Math.sin(t * 2.2 - 0.6) * 2.5,
+        headTilt: Math.sin(t * 1.1) * 0.025,
+        armL: armSway,
+        armR: -armSway,
+        tail: Math.sin(t * 2.6) * 0.18,
+      };
+    },
+  },
+
+  // Walk: idle face, arms down and swinging gently side to side together (content), waddling
+  // in place. Turned a little so the leg swing reads.
+  walk: {
+    label: 'Walk',
+    face: 'idle',
+    pose(t) {
+      const cycle = 0.9;
+      const p = (t / cycle) * TAU;
+      const s = Math.sin(p), c = Math.cos(p);
+      return {
+        turn: 0.5,
+        y: Math.abs(Math.sin(p)) * 5,
+        squash: 1 - Math.abs(Math.cos(p)) * 0.02,
+        lean: s * 0.05,
+        headY: -Math.abs(Math.sin(p)) * 1.5,
+        headTilt: -s * 0.04,
+        armL: s * 0.14,
+        armR: s * 0.14,
+        legLx: s * 0.5,
+        legRx: -s * 0.5,
+        legLy: -Math.max(0, c) * 6,
+        legRy: -Math.max(0, -c) * 6,
+        tail: Math.sin(p + 1) * 0.22,
+      };
+    },
+  },
+
+  // Happy Hop: frame 9:95 exactly — closed happy eyes, smile, the design's arms, and the
+  // Figma hop timing. Nothing added.
+  happy: {
+    label: 'Happy Hop',
+    face: 'happy',
+    pose(t) {
+      return { y: keyframes(HOPS, t % HOP_LOOP), armL: ARM_UP, armR: -ARM_UP };
+    },
+  },
+
+  // Mad Pout: pouting mouth, a throbbing anger mark, arms stiff at the sides, a huffy half-turn,
+  // and the same three-hop bounce as Happy Hop (smaller and stompier).
+  mad: {
+    label: 'Mad Pout',
+    face: 'mad',
+    pose(t) {
+      const lt = t % HOP_LOOP;
+      const hop = keyframes(HOPS, lt) / 24;              // 0..1 using the same hop timing
+      const stomp = Math.sin(hop * Math.PI / 2);
+      // The mark throbs on each landing, then settles.
+      const landings = [HOPS[2][0], HOPS[4][0], HOPS[6][0]];
+      const throb = Math.max(...landings.map((l) => Math.exp(-(((lt - l) * 14) ** 2))));
+      const huff = easeOut(span(t, 0, 0.4));
+      return {
+        y: hop * 12,
+        squash: 1 + stomp * 0.04 - throb * 0.05,
+        turn: -0.32 * huff + Math.sin(t * 1.3) * 0.03,
+        headTilt: 0.06 * huff + Math.sin(t * 9) * 0.01 * (1 - hop),
+        headY: throb * 2,
+        armL: -0.12,
+        armR: 0.12,
+        tail: Math.sin(t * 9) * 0.28,
+        markAlpha: huff,
+        markScale: 1 + throb * 0.22 + Math.sin(t * 6) * 0.03,
+      };
+    },
+  },
+
+  // Excited Jump: crouch, then a big jump where the arms fly from the sides up into the air and
+  // one leg kicks out to the side, slightly behind. Land with a squash, then a short pause.
+  excited: {
+    label: 'Excited Jump',
+    face: 'excited',
+    pose(t) {
+      const lt = t % 1.8;
+      const crouch = easeInOut(span(lt, 0, 0.18)) * (1 - easeOut(span(lt, 0.18, 0.28)));
+      const rise = easeOut(span(lt, 0.2, 0.48));
+      const fall = easeIn(span(lt, 0.48, 0.74));
+      const land = Math.sin(span(lt, 0.74, 1.0) * Math.PI) * (1 - span(lt, 0.74, 1.0) * 0.4);
+      const armsUp = easeOut(span(lt, 0.2, 0.4)) * (1 - easeInOut(span(lt, 0.66, 0.95)));
+      const kick = easeOut(span(lt, 0.26, 0.44)) * (1 - easeInOut(span(lt, 0.56, 0.76)));
+      const air = rise * (1 - fall);
+      // Quick happy flaps while the arms are up (the head is too big for them to go higher).
+      const flap = Math.sin((lt - 0.3) * 30) * 0.1 * armsUp * air;
+      return {
+        y: 64 * air,
+        squash: 1 - crouch * 0.12 + Math.sin(span(lt, 0.2, 0.5) * Math.PI) * 0.08 - land * 0.1,
+        headY: crouch * 4 + land * 3 - Math.sin(span(lt, 0.2, 0.5) * Math.PI) * 3,
+        headTilt: Math.sin(span(lt, 0.2, 0.74) * Math.PI) * -0.05,
+        armL: lerp(0, ARM_UP + 0.14, armsUp) + flap,
+        armR: lerp(0, -ARM_UP - 0.14, armsUp) - flap,
+        armLFwd: armsUp * 0.5,
+        armRFwd: armsUp * 0.5,
+        legRz: -kick * 0.55,
+        legRx: -kick * 0.45,
+        legRy: -kick * 3,
+        tail: Math.sin(lt * 7) * 0.25 + air * 0.3,
+      };
+    },
+  },
+};
+
+// ---------- player: blends between states so every switch is smooth ----------
+const BLEND_TIME = 0.3, FACE_FADE = 0.18;
+const player = { state: 'idle', start: 0, from: { ...REST }, last: { ...REST } };
+
+function play(name, now) {
+  if (!STATES[name] || name === player.state) return;
+  player.from = { ...player.last };
+  player.state = name;
+  player.start = now;
+  const u = body.material.uniforms;
+  u.uFaceFrom.value = u.uFaceMix.value > 0.5 ? u.uFaceTo.value : u.uFaceFrom.value;
+  u.uFaceTo.value = faces[STATES[name].face];
+  u.uFaceMix.value = 0;
+  for (const b of document.querySelectorAll('#states button')) b.setAttribute('aria-pressed', b.dataset.state === name);
+  history.replaceState(null, '', '#' + name);
+}
+
+function samplePose(now) {
+  const t = now - player.start;
+  const target = { ...REST, ...STATES[player.state].pose(t) };
+  const b = easeInOut(clamp01(t / BLEND_TIME));
+  const pose = {};
+  for (const k of Object.keys(REST)) pose[k] = lerp(player.from[k], target[k], b);
+  body.material.uniforms.uFaceMix.value = clamp01(t / FACE_FADE);
+  player.last = pose;
+  return pose;
+}
+
+function applyPose(p) {
+  cat.position.y = p.y;
+  const side = 1 / Math.sqrt(p.squash);
+  cat.scale.set(side, p.squash, side);
+  cat.rotation.set(0, p.turn, p.lean);
+
+  const { head, armL, armR, legL, legR, tail } = parts;
+  head.pivot.position.y = head.rest[1] + p.headY;
+  head.pivot.rotation.z = p.headTilt;
+  // Raise in the body's plane first, then tip toward the camera (positive armFwd = forward).
+  armL.pivot.rotation.set(-p.armLFwd, 0, p.armL);
+  armR.pivot.rotation.set(-p.armRFwd, 0, p.armR);
+  legL.pivot.position.y = legL.rest[1] + p.legLy;
+  legL.pivot.rotation.set(p.legLx, 0, p.legLz);
+  legR.pivot.position.y = legR.rest[1] + p.legRy;
+  legR.pivot.rotation.set(p.legRx, 0, p.legRz);
+  tail.pivot.rotation.z = p.tail;
+
+  const u = body.material.uniforms;
+  u.uMarkAlpha.value = p.markAlpha;
+  u.uMarkScale.value = p.markScale;
+}
+
+// ---------- controls ----------
+const nav = document.getElementById('states');
+for (const [name, { label }] of Object.entries(STATES)) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.dataset.state = name;
+  button.setAttribute('aria-pressed', 'false');
+  button.addEventListener('click', () => play(name, clock.getElapsedTime()));
+  nav.appendChild(button);
+}
+// Number keys 1–5 switch states too.
+window.addEventListener('keydown', (e) => {
+  const name = Object.keys(STATES)[Number(e.key) - 1];
+  if (name) play(name, clock.getElapsedTime());
+});
+
+const clock = new THREE.Clock();
+// Start from the URL: #walk plays Walk; #excited@0.4 freezes Excited Jump at 0.4 s (for inspecting a pose).
+const [initial, frozenAt] = location.hash.slice(1).split('@');
+let freeze = frozenAt === undefined ? null : Number(frozenAt);
+let posed = null;   // a hand-set pose (cat.pose) overrides the animation
+player.state = null;
+play(STATES[initial] ? initial : 'idle', 0);
+if (freeze !== null) player.from = { ...REST, ...STATES[player.state].pose(freeze) };   // no blend-in when frozen
+body.material.uniforms.uFaceFrom.value = body.material.uniforms.uFaceTo.value;
+document.getElementById('loading').remove();
+
+// Control from code (e.g. a portfolio page): cat.play('excited'), cat.freeze('walk', 0.3), cat.resume().
+window.cat = {
+  states: Object.keys(STATES),
+  play: (name) => { freeze = null; play(name, clock.getElapsedTime()); },
+  freeze: (name, t) => {
+    player.state = null;
+    play(name, 0);
+    freeze = t;
+    player.from = { ...REST, ...STATES[name].pose(t) };
+    body.material.uniforms.uFaceFrom.value = body.material.uniforms.uFaceTo.value;
+  },
+  pose: (p) => { posed = p; },
+  resume: () => { const name = player.state; freeze = null; posed = null; player.state = null; play(name, clock.getElapsedTime()); },
+};
+
+renderer.setAnimationLoop(() => {
+  applyPose(posed ? { ...REST, ...posed } : samplePose(freeze ?? clock.getElapsedTime()));
+  controls.update();
+  camera.updateMatrixWorld();
+  lightDirView.value.copy(LIGHT_WORLD).transformDirection(camera.matrixWorldInverse);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
