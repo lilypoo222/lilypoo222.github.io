@@ -24,6 +24,7 @@
 import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
 import Delaunator from 'delaunator';
 
 // Vector source: Figma "Cat Character" > frame "USE THIS CLAUDE" (same paths as assets/images/cat.svg).
@@ -77,41 +78,36 @@ const CAT_SVG = `
 </svg>
 `;
 
-// Mii-style parts. Each 2D outline is inflated like a soap bubble (a smooth Poisson surface),
-// so a round outline becomes a ball and a strip becomes a round tube, with no creases.
-// Head-on, every part keeps the silhouette from the design.
+// How it's built:
+// 1. Each part's 2D outline is inflated into a full, rounded volume (a soap-bubble surface:
+//    round outlines become balls, long ones become round tubes). Head-on it keeps the design's outline.
+// 2. All parts are blended into ONE surface with soft fillets where they meet (smooth union),
+//    like a sculpted game character, so ears and limbs grow out of the head and body.
+// 3. The painted details are wrapped onto that surface, and the idle animation bends it with bones.
+//
 //   zCenter: where the part's middle sits front-to-back
-//   depthScale: overall thickness
-//   roundness: 0.5 = full ball / round tube; lower = flatter front, still rounded at the edges
-//   spacing: mesh resolution (SVG units)
-//   inset: shrink the outline (the design's white head outline trims 3px off the black edge)
-const SOLIDS = {
-  'Tail':     { zCenter: -14, depthScale: 0.6,  roundness: 0.4,  spacing: 1 },
-  'Body':     { zCenter: 0,   depthScale: 0.6,  roundness: 0.35, spacing: 2 },
-  'Arm Up L': { zCenter: 0,   depthScale: 0.6,  roundness: 0.38, spacing: 2 },
-  'Arm Up R': { zCenter: 0,   depthScale: 0.6,  roundness: 0.38, spacing: 2 },
-  'Head':     { zCenter: 0,   depthScale: 0.72, roundness: 0.28, spacing: 1.8, inset: 3 },
+//   depthScale: thickness (1 = ball for round shapes; ~0.7 = round cross-section for long shapes)
+//   blend: how soft the join to the rest of the body is (SVG units)
+//   bone: which animated part moves it
+const PARTS = {
+  body:  { zCenter: 0,   depthScale: 0.8,  spacing: 2,   bone: 'body' },
+  head:  { zCenter: 0,   depthScale: 0.85, spacing: 2.5, bone: 'head', blend: 14, inset: 3 },
+  earL:  { zCenter: 0,   depthScale: 0.5,  spacing: 1.5, bone: 'head', blend: 18 },
+  earR:  { zCenter: 0,   depthScale: 0.5,  spacing: 1.5, bone: 'head', blend: 18 },
+  armL:  { zCenter: 0,   depthScale: 0.75, spacing: 1.5, bone: 'armL', blend: 12 },
+  armR:  { zCenter: 0,   depthScale: 0.75, spacing: 1.5, bone: 'armR', blend: 12 },
+  tail:  { zCenter: -12, depthScale: 0.8,  spacing: 1,   bone: 'tail', blend: 8 },
 };
+const SOLID_PATHS = { 'Body': 'body', 'Head': 'head', 'Arm Up L': 'armL', 'Arm Up R': 'armR', 'Tail': 'tail' };
 
-// The ears are thin shapes of their own on top of the round head ball. Each is cut from the head
-// outline at its inner notch and a point on the side of the head (SVG coordinates from the design);
-// `sink` pushes the ear's base into the ball so they overlap.
+// Ears are cut from the head outline at their inner notch and a point on the side of the head
+// (SVG coordinates from the design); `sink` pushes each ear's base down into the head.
 const EARS = {
-  config: { zCenter: 0, depthScale: 0.38, roundness: 0.35, spacing: 1.2 },
   left:  { notch: [212, 140], tip: [145, 82], side: [125, 178], sink: [28, 22] },
   right: { notch: [390, 134], tip: [455, 88], side: [473, 172], sink: [-28, 22] },
 };
-const GROUPS = ['Belly', 'Head', 'Eye L', 'Eye R'];
 
-// Which animated part each layer belongs to (details are painted onto that part's surface).
-const PART_OF = {
-  'Tail': 'tail', 'Body': 'body', 'Belly': 'body',
-  'Arm Up L': 'armL', 'Arm Up R': 'armR',
-  'Head': 'head', 'Stitches': 'head', 'Eye L': 'head', 'Eye R': 'head', 'Mouth': 'head',
-};
-const PIVOTS = {
-  body: [298, 577], head: [298, 440], tail: [256, 516], armL: [268, 446], armR: [328, 446],
-};
+const PIVOTS = { head: [298, 440], tail: [256, 516], armL: [268, 446], armR: [328, 446] };
 
 // ---------- 2D geometry helpers ----------
 function signedArea(poly) {
@@ -158,26 +154,36 @@ function distToPoly(x, y, poly) {
   return Math.sqrt(best);
 }
 
-function shapeOutline(shape, spacing) {
-  return shape.getSpacedPoints(Math.max(8, Math.ceil(shape.getLength() / spacing))).slice(0, -1).map((v) => [v.x, v.y]);
-}
-
-// Add evenly spaced points along a straight closing edge (last point back to the first).
-function closeWithLine(arc, spacing) {
-  const [x0, y0] = arc[arc.length - 1], [x1, y1] = arc[0];
-  const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing);
-  const out = arc.slice();
-  for (let k = 1; k < steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
-  return out;
-}
-
-// Even triangle mesh filling an outline: boundary points first, then a staggered interior lattice.
-function latticeMesh(poly, spacing) {
+function bounds(poly) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [x, y] of poly) {
     minX = Math.min(minX, x); maxX = Math.max(maxX, x);
     minY = Math.min(minY, y); maxY = Math.max(maxY, y);
   }
+  return { minX, minY, maxX, maxY };
+}
+
+function shapeOutline(shape, spacing) {
+  return shape.getSpacedPoints(Math.max(8, Math.ceil(shape.getLength() / spacing))).slice(0, -1).map((v) => [v.x, v.y]);
+}
+
+function appendLine(out, [x1, y1], spacing) {
+  const [x0, y0] = out[out.length - 1];
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing));
+  for (let k = 1; k <= steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+}
+
+// Add evenly spaced points along a straight closing edge (last point back to the first).
+function closeWithLine(arc, spacing) {
+  const out = arc.slice();
+  appendLine(out, arc[0], spacing);
+  out.pop();
+  return out;
+}
+
+// Even triangle mesh filling an outline: boundary points first, then a staggered interior lattice.
+function latticeMesh(poly, spacing) {
+  const { minX, minY, maxX, maxY } = bounds(poly);
   const pts = poly.map((p) => p.slice());
   const rowH = spacing * 0.866;
   for (let row = 0, y = minY + rowH / 2; y < maxY; row++, y += rowH) {
@@ -197,7 +203,6 @@ function latticeMesh(poly, spacing) {
 }
 
 // Split one ear off the head outline, cutting from the notch to a point on the side of the head.
-// The ear's base reaches into the head ball so the two overlap with no gap.
 function splitEar(poly, { notch, tip, side, sink }, spacing) {
   const nearest = ([px, py]) => {
     let best = 0, bd = Infinity;
@@ -216,19 +221,13 @@ function splitEar(poly, { notch, tip, side, sink }, spacing) {
   return { ear: closeWithLine(earPoly, spacing), rest: closeWithLine(rest, spacing) };
 }
 
-function appendLine(out, [x1, y1], spacing) {
-  const [x0, y0] = out[out.length - 1];
-  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing));
-  for (let k = 1; k <= steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
-}
-
-// ---------- inflated solid ----------
-function inflate(poly, { zCenter, depthScale, roundness, spacing }) {
+// ---------- inflated part: half-thickness T(x, y) ----------
+// Soap-bubble surface: solve  ∇²h = -4  with h = 0 on the outline (cotangent Laplacian, SOR).
+// For a circle of radius R this gives h = R² - r², so sqrt(h) is exactly a sphere.
+function inflate(poly, { depthScale, spacing }) {
   const { pts, faces } = latticeMesh(poly, spacing);
   const nb = poly.length, N = pts.length;
 
-  // Soap-bubble surface: solve  ∇²h = -4  with h = 0 on the outline (cotangent Laplacian, SOR).
-  // For a circle of radius R this gives h = R² - r², so sqrt(h) is exactly a sphere.
   const nbrs = Array.from({ length: N }, () => new Map());
   const area = new Float64Array(N);
   const cot = (o, p, q) => {
@@ -247,44 +246,27 @@ function inflate(poly, { zCenter, depthScale, roundness, spacing }) {
     const A = Math.abs((pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[b][1] - pts[a][1]) * (pts[c][0] - pts[a][0])) / 2;
     area[a] += A / 3; area[b] += A / 3; area[c] += A / 3;
   }
-  const lists = nbrs.map((m) => [...m].map(([j, w]) => [j, Math.max(w, 0)]));
+  // Flatten the neighbour lists into typed arrays: the solver loop runs millions of times.
+  const start = new Int32Array(N + 1);
+  nbrs.forEach((m, i) => { start[i + 1] = start[i] + m.size; });
+  const nbrIdx = new Int32Array(start[N]), nbrW = new Float64Array(start[N]), wSum = new Float64Array(N);
+  nbrs.forEach((m, i) => {
+    let s = start[i];
+    for (const [j, w] of m) { nbrIdx[s] = j; nbrW[s] = Math.max(w, 0); wSum[i] += nbrW[s]; s++; }
+  });
   const h = new Float64Array(N);
   const iters = Math.ceil(4 * Math.sqrt(N));
-  const omega = 1.9;
   for (let it = 0; it < iters; it++) {
     for (let i = nb; i < N; i++) {
-      let sw = 0, sh = 0;
-      for (const [j, w] of lists[i]) { sw += w; sh += w * h[j]; }
-      if (sw > 0) h[i] += omega * ((sh + 4 * area[i]) / sw - h[i]);
+      if (wSum[i] <= 0) continue;
+      let sh = 0;
+      for (let s = start[i]; s < start[i + 1]; s++) sh += nbrW[s] * h[nbrIdx[s]];
+      h[i] += 1.9 * ((sh + 4 * area[i]) / wSum[i] - h[i]);
     }
   }
-  // roundness 0.5 = sphere / round tube; lower = flatter front with rounded edges (a pebble, not a balloon).
-  let hMax = 0;
-  for (let i = 0; i < N; i++) hMax = Math.max(hMax, h[i]);
-  const height = (i) => depthScale * Math.sqrt(hMax) * Math.pow(Math.max(h[i], 0) / hMax, roundness);
+  const T = Array.from(h, (v) => depthScale * Math.sqrt(Math.max(v, 0)));
 
-  // Front surface uses indices 0..N-1; the back reuses the boundary vertices so the seam is shared.
-  const positions = [];
-  for (let i = 0; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter + height(i));
-  for (let i = nb; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter - height(i));
-  const backIndex = (i) => (i < nb ? i : N + (i - nb));
-
-  // Make the front faces point toward +z.
-  const [a0, b0, c0] = faces[0];
-  const cross = (pts[b0][0] - pts[a0][0]) * (pts[c0][1] - pts[a0][1]) - (pts[b0][1] - pts[a0][1]) * (pts[c0][0] - pts[a0][0]);
-  const index = [];
-  for (const [a, b, c] of faces) {
-    if (cross > 0) index.push(a, b, c, backIndex(a), backIndex(c), backIndex(b));
-    else index.push(a, c, b, backIndex(a), backIndex(b), backIndex(c));
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(index);
-  geometry.computeVertexNormals();
-
-  // Point lookup on the front surface: interpolated height and normal at any (x, y).
-  const P = geometry.attributes.position.array, Nrm = geometry.attributes.normal.array;
+  // Point lookup: interpolated half-thickness at (x, y), or null outside the outline.
   const cell = spacing * 3;
   const buckets = new Map();
   const key = (i, j) => i * 100003 + j;
@@ -298,7 +280,7 @@ function inflate(poly, { zCenter, depthScale, roundness, spacing }) {
       }
     }
   });
-  const surfaceAt = (x, y) => {
+  return (x, y) => {
     for (const fi of buckets.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []) {
       const [a, b, c] = faces[fi];
       const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c];
@@ -307,84 +289,97 @@ function inflate(poly, { zCenter, depthScale, roundness, spacing }) {
       const v = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d;
       const w = 1 - u - v;
       if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
-      const n = new THREE.Vector3(
-        u * Nrm[a * 3] + v * Nrm[b * 3] + w * Nrm[c * 3],
-        u * Nrm[a * 3 + 1] + v * Nrm[b * 3 + 1] + w * Nrm[c * 3 + 1],
-        u * Nrm[a * 3 + 2] + v * Nrm[b * 3 + 2] + w * Nrm[c * 3 + 2],
-      ).normalize();
-      return { z: u * P[a * 3 + 2] + v * P[b * 3 + 2] + w * P[c * 3 + 2], n };
+      return u * T[a] + v * T[b] + w * T[c];
     }
     return null;
   };
-
-  return { geometry, surfaceAt, poly };
 }
 
-// ---------- painted details, wrapped onto a part's surface ----------
-// Uniform 1→4 splits (every triangle the same number of times) so neighbouring triangles
-// share their new vertices exactly and no hairline cracks open when the paint is curved.
-function subdivideUniform(src, maxLen) {
-  let longest = 0;
-  for (let i = 0; i < src.length; i += 9) {
-    for (let k = 0; k < 3; k++) {
-      const a = i + k * 3, b = i + ((k + 1) % 3) * 3;
-      longest = Math.max(longest, Math.hypot(src[a] - src[b], src[a + 1] - src[b + 1]));
+// ---------- 3D field per part ----------
+// Raster of the part's half-thickness inside its outline and (negative) distance outside,
+// so  f(x, y, z) = |z - zCenter| - T(x, y)  is < 0 inside the part and > 0 outside.
+const RASTER = 1.5, MARGIN = 30;
+function partField(poly, cfg) {
+  const thickness = inflate(poly, cfg);
+  const b = bounds(poly);
+  const x0 = b.minX - MARGIN, y0 = b.minY - MARGIN;
+  const nx = Math.ceil((b.maxX - b.minX + 2 * MARGIN) / RASTER) + 1;
+  const ny = Math.ceil((b.maxY - b.minY + 2 * MARGIN) / RASTER) + 1;
+  const T = new Float32Array(nx * ny);
+  const inside = new Uint8Array(nx * ny);
+
+  // Scanline fill for inside/outside.
+  for (let j = 0; j < ny; j++) {
+    const y = y0 + j * RASTER;
+    const xs = [];
+    for (let i = 0, k = poly.length - 1; i < poly.length; k = i++) {
+      const [xi, yi] = poly[i], [xk, yk] = poly[k];
+      if ((yi > y) !== (yk > y)) xs.push(xi + ((y - yi) * (xk - xi)) / (yk - yi));
+    }
+    xs.sort((p, q) => p - q);
+    for (let s = 0; s + 1 < xs.length; s += 2) {
+      for (let i = Math.max(0, Math.ceil((xs[s] - x0) / RASTER)); i <= Math.min(nx - 1, Math.floor((xs[s + 1] - x0) / RASTER)); i++) inside[j * nx + i] = 1;
     }
   }
-  let tris = src;
-  for (let level = Math.ceil(Math.log2(Math.max(longest / maxLen, 1))); level > 0; level--) {
-    const out = [];
-    for (let i = 0; i < tris.length; i += 9) {
-      const A = [tris[i], tris[i + 1]], B = [tris[i + 3], tris[i + 4]], C = [tris[i + 6], tris[i + 7]];
-      const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
-      const AB = mid(A, B), BC = mid(B, C), CA = mid(C, A);
-      for (const [p, q, r] of [[A, AB, CA], [AB, B, BC], [CA, BC, C], [AB, BC, CA]]) out.push(p[0], p[1], 0, q[0], q[1], 0, r[0], r[1], 0);
+
+  // Inside: inflated half-thickness. Outside: chamfer distance to the outline, negated.
+  const BIG = 1e6, D1 = RASTER, D2 = RASTER * Math.SQRT2;
+  const dist = new Float32Array(nx * ny);
+  for (let k = 0; k < nx * ny; k++) dist[k] = inside[k] ? 0 : BIG;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (i > 0) d = Math.min(d, dist[k - 1] + D1);
+    if (j > 0) d = Math.min(d, dist[k - nx] + D1);
+    if (i > 0 && j > 0) d = Math.min(d, dist[k - nx - 1] + D2);
+    if (i < nx - 1 && j > 0) d = Math.min(d, dist[k - nx + 1] + D2);
+    dist[k] = d;
+  }
+  for (let j = ny - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
+    const k = j * nx + i;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (i < nx - 1) d = Math.min(d, dist[k + 1] + D1);
+    if (j < ny - 1) d = Math.min(d, dist[k + nx] + D1);
+    if (i < nx - 1 && j < ny - 1) d = Math.min(d, dist[k + nx + 1] + D2);
+    if (i > 0 && j < ny - 1) d = Math.min(d, dist[k + nx - 1] + D2);
+    dist[k] = d;
+  }
+  // Store the SQUARED thickness (signed): it varies smoothly, even at the rim where the thickness
+  // itself rises steeply, so interpolating it and taking the square root afterwards gives a clean,
+  // round edge. A light blur then removes the faceting of the solver's triangle mesh.
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i;
+    if (inside[k]) { const t = thickness(x0 + i * RASTER, y0 + j * RASTER) ?? 0; T[k] = t * t; }
+    else { const d = Math.max(dist[k] - RASTER / 2, 0.01); T[k] = -d * d; }
+  }
+  const tmp = new Float32Array(nx * ny);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      tmp[k] = (T[k] * 2 + (i > 0 ? T[k - 1] : T[k]) + (i < nx - 1 ? T[k + 1] : T[k])) / 4;
     }
-    tris = out;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      T[k] = (tmp[k] * 2 + (j > 0 ? tmp[k - nx] : tmp[k]) + (j < ny - 1 ? tmp[k + nx] : tmp[k])) / 4;
+    }
   }
-  return tris;
+
+  const zc = cfg.zCenter;
+  return (x, y, z) => {
+    const fx = (x - x0) / RASTER, fy = (y - y0) / RASTER;
+    if (fx < 0 || fy < 0 || fx >= nx - 1 || fy >= ny - 1) return 1e3;
+    const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j, k = j * nx + i;
+    const s = (T[k] * (1 - tx) + T[k + 1] * tx) * (1 - ty) + (T[k + nx] * (1 - tx) + T[k + nx + 1] * tx) * ty;
+    return Math.abs(z - zc) - (s >= 0 ? Math.sqrt(s) : -Math.sqrt(-s));
+  };
 }
 
-// A filled shape as an even triangle mesh (flat x, y, 0 triangles).
-function fillTriangles(path, spacing) {
-  const out = [];
-  for (const shape of SVGLoader.createShapes(path)) {
-    const { pts, faces } = latticeMesh(shapeOutline(shape, spacing), spacing);
-    for (const f of faces) for (const v of f) out.push(pts[v][0], pts[v][1], 0);
-  }
-  return out;
-}
-
-function strokeTriangles(sub, style) {
-  const geo = SVGLoader.pointsToStroke(sub.getPoints(), style);
-  if (!geo) return [];
-  return subdivideUniform(Array.from((geo.index ? geo.toNonIndexed() : geo).attributes.position.array), 2);
-}
-
-// Paint that falls outside the part's silhouette is dropped: in the 2D design it sits on the
-// white background, so it isn't visible there either.
-function decal(src, solid, lift, material) {
-  const pos = [], nrm = [];
-  for (let i = 0; i < src.length; i += 9) {
-    // Wind every triangle the same way as the solids' front faces so lighting treats it as front-facing.
-    const cross = (src[i + 3] - src[i]) * (src[i + 7] - src[i + 1]) - (src[i + 4] - src[i + 1]) * (src[i + 6] - src[i]);
-    const order = cross > 0 ? [0, 1, 2] : [0, 2, 1];
-    const hits = order.map((k) => solid.surfaceAt(src[i + k * 3], src[i + k * 3 + 1]));
-    if (hits.some((s) => !s)) continue;
-    hits.forEach((s, j) => {
-      const k = order[j];
-      pos.push(src[i + k * 3] + s.n.x * lift, src[i + k * 3 + 1] + s.n.y * lift, s.z + s.n.z * lift);
-      nrm.push(s.n.x, s.n.y, s.n.z);
-    });
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  return new THREE.Mesh(g, material);
-}
-
-function onSilhouette(sub, solid, tolerance) {
-  return sub.getSpacedPoints(24).every((p) => distToPoly(p.x, p.y, solid.poly) < tolerance);
+// Polynomial smooth minimum: a soft, rounded join instead of a crease.
+function smin(a, b, k) {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * k * 0.25;
 }
 
 // ---------- scene ----------
@@ -401,55 +396,111 @@ controls.enableDamping = true;
 controls.enablePan = false;
 controls.target.set(0, 255, 0);
 
-// Cartoon (cel) shading, like a 3D game character: flat colour on the lit side, one crisp
-// shadow band, and a rim highlight on the black parts so their shape reads. No gloss.
+// Cartoon (cel) shading, like a 3D game character: flat colour where lit, one crisp shadow band.
+// The design's painted layers (eyes, belly, stitches, mouth) are drawn by the browser straight from
+// the SVG into a texture and projected onto the front of the surface, so they match the vector
+// artwork exactly and move with the body as it animates.
 const LIGHT_WORLD = new THREE.Vector3(-0.45, 0.7, 0.9).normalize();
 const lightDirView = { value: new THREE.Vector3() };
 
+const PAINT_BOX = { x: 115, y: 75, w: 375, h: 510 };   // SVG area covered by the paint texture
+const PAINT_PX_PER_UNIT = 5;
+const SOLID_IDS = ['Tail', 'Body', 'Arm Up L', 'Arm Up R'];
+
+function onSilhouette(sub, poly, tolerance) {
+  return sub.getSpacedPoints(24).every((p) => distToPoly(p.x, p.y, poly) < tolerance);
+}
+
+async function paintTexture() {
+  const doc = new DOMParser().parseFromString(CAT_SVG.trim(), 'image/svg+xml');
+  const svg = doc.documentElement;
+  // Keep only the painted layers: drop the solid shapes and the black head fill.
+  for (const id of SOLID_IDS) doc.getElementById(id)?.remove();
+  doc.getElementById('Head').querySelector('path').remove();
+  // The white head outline: the pieces running along the silhouette only trim the head's edge
+  // (applied as the head's inset), so keep just the inner ear lines.
+  const outline = doc.getElementById('Head').querySelector('path');
+  const outlinePath = data.paths.find((p) => p.userData.node.parentNode.id === 'Head' && p.userData.style.fill === 'none');
+  const pieces = outline.getAttribute('d').split(/(?=M)/);
+  outline.setAttribute('d', pieces.filter((_, i) => !onSilhouette(outlinePath.subPaths[i], fields.headOutline, 6)).join(''));
+  const w = Math.round(PAINT_BOX.w * PAINT_PX_PER_UNIT), h = Math.round(PAINT_BOX.h * PAINT_PX_PER_UNIT);
+  svg.setAttribute('viewBox', `${PAINT_BOX.x} ${PAINT_BOX.y} ${PAINT_BOX.w} ${PAINT_BOX.h}`);
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  await img.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = false;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return texture;
+}
+
 const TOON_VERTEX = `
+  #include <common>
+  #include <skinning_pars_vertex>
+  uniform vec4 uPaintBox;
   varying vec3 vNormal;
-  varying vec3 vViewDir;
+  varying vec2 vUv;
+  varying float vFront;
   void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vNormal = normalize(normalMatrix * normal);
-    vViewDir = -mv.xyz;
-    gl_Position = projectionMatrix * mv;
+    // Paint is looked up from the rest pose, so it sticks to the surface while it moves.
+    vUv = (position.xy - uPaintBox.xy) / uPaintBox.zw;
+    vFront = smoothstep(0.05, 0.3, normalize(normal).z);
+    #include <beginnormal_vertex>
+    #include <skinbase_vertex>
+    #include <skinnormal_vertex>
+    #include <begin_vertex>
+    #include <skinning_vertex>
+    vNormal = normalize(normalMatrix * objectNormal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
   }
 `;
 const TOON_FRAGMENT = `
-  uniform vec3 uColor;
-  uniform vec3 uRim;
-  uniform float uShadow;
+  uniform vec3 uBaseLit;
+  uniform vec3 uBaseShadow;
+  uniform float uPaintShadow;
+  uniform sampler2D uPaint;
   uniform vec3 uLightDir;
   varying vec3 vNormal;
-  varying vec3 vViewDir;
+  varying vec2 vUv;
+  varying float vFront;
   void main() {
     vec3 n = normalize(vNormal);
     if (!gl_FrontFacing) n = -n;
-    vec3 v = normalize(vViewDir);
     float ndl = dot(n, uLightDir);
-    float lit = mix(uShadow, 1.0, smoothstep(-0.03, 0.03, ndl));
-    float edge = 1.0 - max(dot(n, v), 0.0);
-    float rim = smoothstep(0.6, 0.64, edge) * smoothstep(-0.1, 0.2, ndl);
-    gl_FragColor = vec4(uColor * lit + uRim * rim, 1.0);
+    // Hard cartoon edge, antialiased to about a pixel so it stays clean.
+    float aa = max(fwidth(ndl), 0.01);
+    float lit = smoothstep(-aa, aa, ndl);
+
+    vec4 paint = texture2D(uPaint, vUv);
+    float a = paint.a * vFront;
+    vec3 litColor = mix(uBaseLit, paint.rgb, a);
+    vec3 shadowColor = mix(uBaseShadow, paint.rgb * uPaintShadow, a);
+    gl_FragColor = vec4(mix(shadowColor, litColor, lit), 1.0);
     #include <colorspace_fragment>
   }
 `;
 
-function toonMaterial(css, { rim = '#000000', shadow = 0.72, side = THREE.FrontSide, offset = 0 } = {}) {
+// Black parts: two flat tones (very dark grey where lit, pure black in shadow).
+function catMaterial(paint) {
   return new THREE.ShaderMaterial({
     uniforms: {
-      uColor: { value: new THREE.Color().setStyle(css) },
-      uRim: { value: new THREE.Color().setStyle(rim) },
-      uShadow: { value: shadow },
+      uBaseLit: { value: new THREE.Color('#1f1f1f') },
+      uBaseShadow: { value: new THREE.Color('#000000') },
+      uPaintShadow: { value: 0.72 },
+      uPaint: { value: paint },
+      uPaintBox: { value: new THREE.Vector4(PAINT_BOX.x, PAINT_BOX.y, PAINT_BOX.w, PAINT_BOX.h) },
       uLightDir: lightDirView,
     },
     vertexShader: TOON_VERTEX,
     fragmentShader: TOON_FRAGMENT,
-    side,
-    polygonOffset: offset !== 0,
-    polygonOffsetFactor: offset ? -2 : 0,
-    polygonOffsetUnits: offset,
   });
 }
 
@@ -471,83 +522,131 @@ svgRoot.scale.y = -1;
 svgRoot.position.set(-298, 577, 0);
 cat.add(svgRoot);
 
-const parts = {};
-for (const [name, [px, py]] of Object.entries(PIVOTS)) {
-  const pivot = new THREE.Group();
-  pivot.position.set(px, py, 0);
-  const inner = new THREE.Group();
-  inner.position.set(-px, -py, 0);
-  pivot.add(inner);
-  svgRoot.add(pivot);
-  parts[name] = { pivot, inner, rest: [px, py] };
-}
-
-// Black parts: two flat tones (very dark grey where lit, pure black in shadow) instead of a shiny rim.
-const solidMaterial = toonMaterial('#1f1f1f', { shadow: 0 });
-let layer = 0;
-function paintMaterial(css) {
-  layer++;
-  return toonMaterial(css, { side: THREE.DoubleSide, offset: -4 * layer });
-}
-
-const painted = (v) => v !== undefined && v !== 'none' && v !== 'transparent';
-const solids = {};
-const stackDepth = {};
-const LIFT = 0.35;
-
+// ---------- build the parts' fields from the SVG ----------
 const data = new SVGLoader().parse(CAT_SVG);
+const fields = {};
 for (const path of data.paths) {
   const node = path.userData.node;
-  const name = GROUPS.includes(node.parentNode.id) ? node.parentNode.id : node.id;
-  const part = PART_OF[name];
+  const key = SOLID_PATHS[node.parentNode.id === 'Head' ? 'Head' : node.id];
   const style = path.userData.style;
-  const target = parts[part].inner;
-
-  if (SOLIDS[name] && painted(style.fill)) {
-    const cfg = SOLIDS[name];
-    const outline = painted(style.stroke) ? style.strokeWidth : 0;
-    const poly = offsetOutline(shapeOutline(SVGLoader.createShapes(path)[0], cfg.spacing), outline / 2 - (cfg.inset || 0));
-
-    if (name !== 'Head') {
-      const solid = inflate(poly, cfg);
-      target.add(new THREE.Mesh(solid.geometry, solidMaterial));
-      solids[part] = solid;
-      continue;
-    }
-
-    // Head = round ball + two thin ears. Paint lands on whichever surface is in front.
+  if (!key || style.fill === 'none' || style.fill === undefined) continue;
+  const cfg = PARTS[key];
+  const outline = style.stroke && style.stroke !== 'none' ? style.strokeWidth : 0;
+  const poly = offsetOutline(shapeOutline(SVGLoader.createShapes(path)[0], cfg.spacing), outline / 2 - (cfg.inset || 0));
+  if (key === 'head') {
     const left = splitEar(poly, EARS.left, cfg.spacing);
     const right = splitEar(left.rest, EARS.right, cfg.spacing);
-    const pieces = [inflate(right.rest, cfg), inflate(left.ear, EARS.config), inflate(right.ear, EARS.config)];
-    for (const p of pieces) target.add(new THREE.Mesh(p.geometry, solidMaterial));
-    solids[part] = {
-      poly,
-      surfaceAt: (x, y) => pieces.map((p) => p.surfaceAt(x, y)).filter(Boolean).sort((a, b) => b.z - a.z)[0] || null,
-    };
-    continue;
+    fields.head = partField(right.rest, cfg);
+    fields.earL = partField(left.ear, PARTS.earL);
+    fields.earR = partField(right.ear, PARTS.earR);
+    fields.headOutline = poly;
+  } else {
+    fields[key] = partField(poly, cfg);
   }
+}
 
-  // Details in SVG paint order: each later layer sits a hair higher (and gets a stronger depth
-  // offset) so it draws on top. Within a group the stack is capped: the stripes never overlap
-  // each other, so they can share one height.
-  const solid = solids[part];
-  const nextLift = () => {
-    stackDepth[name] = Math.min((stackDepth[name] || 0) + 1, 5);
-    return LIFT * stackDepth[name];
-  };
-  if (painted(style.fill)) {
-    target.add(decal(fillTriangles(path, 1.5), solid, nextLift(), paintMaterial(style.fill)));
-  }
-  if (painted(style.stroke)) {
-    const material = paintMaterial(style.stroke);
-    const lift = nextLift();
-    for (const sub of path.subPaths) {
-      // Strokes drawn along the silhouette only trim the edge (already applied as the solid's inset).
-      if (onSilhouette(sub, solid, style.strokeWidth)) continue;
-      target.add(decal(strokeTriangles(sub, style), solid, lift, material));
+const BLEND_ORDER = ['head', 'earL', 'earR', 'armL', 'armR', 'tail'];
+function catField(x, y, z) {
+  let f = fields.body(x, y, z);
+  for (const k of BLEND_ORDER) f = smin(f, fields[k](x, y, z), PARTS[k].blend);
+  return f;
+}
+
+// ---------- one continuous surface (marching cubes) ----------
+const BOX = { x0: 40, y0: 60, z0: -260, size: 540 };
+const RES = 180;
+const step = BOX.size / (RES - 1);
+const mc = new MarchingCubes(RES, new THREE.MeshBasicMaterial(), false, false, 400000);
+mc.isolation = 0;
+for (let zi = 0; zi < RES; zi++) {
+  const z = BOX.z0 + zi * step;
+  for (let yi = 0; yi < RES; yi++) {
+    const y = BOX.y0 + yi * step;
+    for (let xi = 0; xi < RES; xi++) {
+      mc.field[xi + yi * RES + zi * RES * RES] = -catField(BOX.x0 + xi * step, y, z);
     }
   }
 }
+mc.update();
+
+const vertexCount = mc.count;
+const half = RES / 2;
+const toSvg = (p, origin) => origin + (p * half + half) * step;
+const positions = new Float32Array(vertexCount * 3);
+const normals = new Float32Array(vertexCount * 3);
+const srcPos = mc.geometry.attributes.position.array;
+for (let v = 0; v < vertexCount; v++) {
+  positions[v * 3] = toSvg(srcPos[v * 3], BOX.x0);
+  positions[v * 3 + 1] = toSvg(srcPos[v * 3 + 1], BOX.y0);
+  positions[v * 3 + 2] = toSvg(srcPos[v * 3 + 2], BOX.z0);
+}
+mc.geometry.dispose();
+
+// Shading normals from the exact surface (not the coarse marching-cubes grid), so the toon
+// light/shadow edge runs smooth. Vertices repeat across triangles, so cache by position.
+const normalCache = new Map();
+for (let v = 0; v < vertexCount; v++) {
+  const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+  const k = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
+  let n = normalCache.get(k);
+  if (!n) {
+    const e = 1.5;
+    n = [
+      catField(x + e, y, z) - catField(x - e, y, z),
+      catField(x, y + e, z) - catField(x, y - e, z),
+      catField(x, y, z + e) - catField(x, y, z - e),
+    ];
+    const len = Math.hypot(...n) || 1;
+    n = n.map((c) => c / len);
+    normalCache.set(k, n);
+  }
+  normals.set(n, v * 3);
+}
+
+// ---------- bones: each vertex follows the part(s) it belongs to, blended near the joins ----------
+const BONES = ['body', 'head', 'armL', 'armR', 'tail'];
+const boneOf = { body: 'body', head: 'head', earL: 'head', earR: 'head', armL: 'armL', armR: 'armR', tail: 'tail' };
+const skinIndex = new Uint16Array(vertexCount * 4);
+const skinWeight = new Float32Array(vertexCount * 4);
+for (let v = 0; v < vertexCount; v++) {
+  const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+  const nearest = new Array(BONES.length).fill(Infinity);
+  for (const [k, field] of Object.entries(fields)) {
+    if (typeof field !== 'function') continue;
+    const b = BONES.indexOf(boneOf[k]);
+    nearest[b] = Math.min(nearest[b], field(x, y, z));
+  }
+  const best = Math.min(...nearest);
+  const w = nearest.map((f) => Math.exp(-(f - best) / 4));
+  const order = w.map((val, i) => [val, i]).sort((a, b) => b[0] - a[0]).slice(0, 4);
+  const sum = order.reduce((s, [val]) => s + val, 0);
+  order.forEach(([val, i], slot) => { skinIndex[v * 4 + slot] = i; skinWeight[v * 4 + slot] = val / sum; });
+}
+
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+geometry.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4));
+geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+
+const body = new THREE.SkinnedMesh(geometry, catMaterial(await paintTexture()));
+body.frustumCulled = false;
+svgRoot.add(body);
+
+const rootBone = new THREE.Bone();
+const bones = [rootBone];
+const parts = {};
+for (const name of BONES.slice(1)) {
+  const [px, py] = PIVOTS[name];
+  const bone = new THREE.Bone();
+  bone.position.set(px, py, 0);
+  rootBone.add(bone);
+  bones.push(bone);
+  parts[name] = { pivot: bone, rest: [px, py] };
+}
+body.add(rootBone);
+svgRoot.updateMatrixWorld(true);
+body.bind(new THREE.Skeleton(bones));
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
