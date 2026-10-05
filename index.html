@@ -6,10 +6,27 @@
   <title>Portfolio</title>
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
 </head>
 <body>
-  <h1>Portfolio</h1>
+  <main>
+    <section class="hero">
+      <!-- Figma: Portfolio_02 > Portfolio_Idea2 > hero_text_animated -->
+      <h1 class="hero-text">
+        <span class="visually-hidden">DESIGN is celebrating what you LOVE</span>
+        <img class="hero-text__art" src="assets/images/hero/hero-text.svg" width="1107" height="247" alt="">
+        <canvas class="hero-text__warp" aria-hidden="true"></canvas>
+      </h1>
+    </section>
+  </main>
 
   <script src="assets/js/main.js" defer></script>
+  <script type="module" src="assets/js/hero-warp.js"></script>
 </body>
 </html>

@@ -17,5 +17,15 @@ assets/
 
 ## Uploading
 
-Upload everything **except** `.git/`, `.gitignore` and `README.md`.
+Upload everything **except** `.git/`, `.gitignore`, `README.md` and `tools/`.
+
+## Local preview
+
+Pages that use WebGL need to be served over `http://` (opening the file directly won't load the artwork into WebGL):
+
+```
+powershell -ExecutionPolicy Bypass -File tools/serve.ps1
+```
+
+Then open http://localhost:8080/.
 All links use relative paths, so the site works at a domain root or in a subfolder.

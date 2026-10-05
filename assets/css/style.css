@@ -17,3 +17,62 @@ img {
   max-width: 100%;
   display: block;
 }
+
+html {
+  overflow-x: clip;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Hero ---------- */
+/* Figma (1440 wide): hero_text_animated sits 60px from the left, ~110px from the top. */
+.hero {
+  padding: 110px 60px 0;
+}
+
+.hero-text {
+  position: relative;
+  width: min(1107px, 100%);
+  margin: 0;
+  line-height: 0;
+}
+
+.hero-text__art {
+  width: 100%;
+  height: auto;
+}
+
+/* The warp canvas overhangs the text so letters can stretch past their box. */
+.hero-text__warp {
+  display: none;
+  position: absolute;
+  left: -4%;
+  top: -20%;
+  width: 108%;
+  height: 140%;
+  pointer-events: none;
+}
+
+.hero-text.is-warping .hero-text__art {
+  visibility: hidden;
+}
+
+.hero-text.is-warping .hero-text__warp {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding: 64px 16px 0;
+  }
+}
