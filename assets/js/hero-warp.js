@@ -1,16 +1,16 @@
 // Hero text hover warp.
 // The hero text is drawn into a WebGL canvas. A small "jelly" simulation runs underneath it:
 // moving the cursor across the letters pushes them along with it, they spring back with a soft
-// wobble, and a gentle lens swells the letters under the cursor. The plain SVG stays in the page
-// as the fallback (no WebGL, or reduced motion).
+// wobble, and a gentle lens swells the letters under the cursor. The real text stays in the page
+// (invisible while the canvas shows it), and is simply shown as-is without WebGL or with
+// reduced motion.
 import * as THREE from 'three';
 
 const hero = document.querySelector('.hero-text');
-const art = hero?.querySelector('.hero-text__art');
 const canvas = hero?.querySelector('.hero-text__warp');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-if (hero && art && canvas && !reduceMotion) start().catch(() => hero.classList.remove('is-warping'));
+if (hero && canvas && !reduceMotion) start().catch(() => hero.classList.remove('is-warping'));
 
 // ---------- tuning ----------
 const SIM_WIDTH = 320;       // simulation resolution (height follows the canvas aspect)
@@ -87,7 +87,7 @@ const DISPLAY_FRAGMENT = `
 `;
 
 async function start() {
-  await art.decode();
+  await document.fonts.ready;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, premultipliedAlpha: false });
   renderer.setClearColor(0x000000, 0);
@@ -103,14 +103,22 @@ async function start() {
   textTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
   function drawText(cw, ch, dpr) {
-    // Place the SVG inside the (larger) canvas exactly where the static image sits.
+    // Draw each word exactly where the (invisible) page text sits, in its own font style.
     const c = canvas.getBoundingClientRect();
-    const a = art.getBoundingClientRect();
     textCanvas.width = Math.round(cw * dpr);
     textCanvas.height = Math.round(ch * dpr);
     const ctx = textCanvas.getContext('2d');
     ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
-    ctx.drawImage(art, (a.left - c.left) * dpr, (a.top - c.top) * dpr, a.width * dpr, a.height * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#000';
+    for (const word of hero.querySelectorAll('.hero-text__word')) {
+      const style = getComputedStyle(word);
+      ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      // An inline box's height is the font's ascent + descent, so the baseline is top + ascent.
+      const r = word.getBoundingClientRect();
+      const ascent = ctx.measureText(word.textContent).fontBoundingBoxAscent;
+      ctx.fillText(word.textContent, r.left - c.left, r.top - c.top + ascent);
+    }
     textTexture.needsUpdate = true;
   }
 
@@ -219,8 +227,11 @@ async function start() {
     renderer.render(displayScene, camera);
   }
 
-  hero.classList.add('is-warping');
+  // Draw the first frame before hiding the page text, so there's never a blank moment.
   resize();
+  displayMaterial.uniforms.uSim.value = simA.texture;
+  renderer.render(displayScene, camera);
+  hero.classList.add('is-warping');
   new ResizeObserver(resize).observe(hero);
   requestAnimationFrame((t) => { last = t; frame(t); });
 }

@@ -87,26 +87,42 @@ html {
 }
 
 /* ---------- Hero ---------- */
-/* Figma (1440 wide): hero_text_animated sits 60px from the left, ~110px from the top. */
+/* Figma (1440 wide): hero_text_animated is Instrument Serif at 144.08px, 60px from the left,
+   with baselines at y 217.5 and 324.5 (107px apart). It scales down to fit narrower screens
+   (the longest line is about 7.7em wide). */
+:root {
+  --gutter: 60px;
+}
+
 .hero {
-  padding: 110px 60px 0;
+  padding: 115px var(--gutter) 0;
 }
 
 .hero-text {
   position: relative;
-  width: min(1107px, 100%);
+  width: fit-content;
   margin: 0;
-  line-height: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: min(144.08px, calc((100vw - 2 * var(--gutter)) / 7.7));
+  line-height: 0.743;
+  color: #000;
 }
 
-.hero-text__art {
-  width: 100%;
-  height: auto;
+.hero-text__line {
+  display: block;
+  white-space: nowrap;
+}
+
+/* While the warp canvas draws the text, the real text stays in place (selectable, readable by
+   screen readers) but invisible. */
+.hero-text.is-warping .hero-text__line {
+  color: transparent;
 }
 
 /* The warp canvas overhangs the text so letters can stretch past their box. */
 .hero-text__warp {
-  display: none;
+  visibility: hidden;
   position: absolute;
   left: -4%;
   top: -20%;
@@ -115,16 +131,16 @@ html {
   pointer-events: none;
 }
 
-.hero-text.is-warping .hero-text__art {
-  visibility: hidden;
-}
-
 .hero-text.is-warping .hero-text__warp {
-  display: block;
+  visibility: visible;
 }
 
 @media (max-width: 640px) {
+  :root {
+    --gutter: 16px;
+  }
+
   .hero {
-    padding: 64px 16px 0;
+    padding-top: 64px;
   }
 }
