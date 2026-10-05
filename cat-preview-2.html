@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat 3D Preview</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <style>
+    html, body { margin: 0; height: 100%; background: #ffffff; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "delaunator": "https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm"
+      }
+    }
+  </script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import Delaunator from 'delaunator';
+
+// Vector source: Figma "Cat Character" > frame "USE THIS CLAUDE" (same paths as assets/images/cat.svg).
+// Kept in raw frame coordinates (0 0 600 640) so the parts line up exactly as designed.
+const CAT_SVG = `
+<svg width="600" height="640" viewBox="0 0 600 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="cat">
+<path id="Tail" d="M232.643 505.468C236.828 509.653 241.924 512.743 247.933 514.739C253.497 516.587 254.55 522.739 248.693 522.503C237.352 522.047 225.908 516.169 217.866 510.437C214.388 507.958 214.381 502.979 217.542 500.106C220.397 497.51 224.789 497.614 227.518 500.343L232.643 505.468Z" fill="black" stroke="black" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Body" d="M260.143 548L262.143 472V432H334.143V472L336.143 548C336.143 565.333 330.809 574 320.143 574C310.809 574 306.143 566.667 306.143 552C300.809 546.667 295.476 546.667 290.143 552C290.143 566.667 285.476 574 276.143 574C265.476 574 260.143 565.333 260.143 548Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<path id="Arm Up L" d="M223.605 430.792C238.85 435.782 257.19 444.607 276.639 448.776L260.315 483.5C249.405 476.907 225.902 462.85 210.521 451.975C206.478 449.117 202.469 445.783 200.787 441.127C199.242 436.85 200.315 433.552 204.005 431.235C209.752 427.626 217.156 428.681 223.605 430.792Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<path id="Arm Up R" d="M372.782 430.792C357.538 435.782 339.198 444.607 319.748 448.776L336.073 483.5C346.983 476.907 370.485 462.85 385.867 451.975C389.909 449.117 393.919 445.783 395.6 441.127C397.146 436.85 396.073 433.552 392.382 431.235C386.635 427.626 379.232 428.681 372.782 430.792Z" fill="black" stroke="black" stroke-width="6" stroke-linejoin="round"/>
+<g id="Belly">
+<path id="Vector" d="M309.422 533.139C320.757 530.076 326.018 513.062 321.173 495.138C316.328 477.214 303.211 465.168 291.877 468.232C280.542 471.295 275.281 488.309 280.126 506.233C284.972 524.157 298.088 536.203 309.422 533.139Z" fill="white" stroke="black" stroke-width="5"/>
+<path id="Vector_2" d="M281.799 479.955C281.508 478.889 280.408 478.263 279.343 478.555C278.278 478.848 277.651 479.948 277.942 481.014L279.871 480.484L281.799 479.955ZM290.763 527.851C291.054 528.917 292.154 529.543 293.219 529.251C294.284 528.958 294.912 527.858 294.62 526.792L292.691 527.322L290.763 527.851ZM279.871 480.484L277.942 481.014L290.763 527.851L292.691 527.322L294.62 526.792L281.799 479.955L279.871 480.484Z" fill="black"/>
+<path id="Vector_3" d="M285.796 472.758L301.823 532.049" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_4" d="M292.18 467.707L309.677 532.435" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_5" d="M299.457 468.9L314.994 526.378" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_6" d="M310.718 475.158C310.43 474.092 309.332 473.461 308.266 473.749C307.199 474.037 306.568 475.135 306.856 476.201L308.787 475.68L310.718 475.158ZM318.254 518.411C318.542 519.477 319.64 520.109 320.706 519.821C321.773 519.533 322.404 518.435 322.116 517.369L320.185 517.89L318.254 518.411ZM308.787 475.68L306.856 476.201L318.254 518.411L320.185 517.89L322.116 517.369L310.718 475.158L308.787 475.68Z" fill="black"/>
+</g>
+<g id="Head">
+<path d="M137.493 92.2036C140.147 80.7307 154.469 77.2375 162.437 85.9085L212.143 140C269.476 129.333 328.81 127.333 390.143 134L438.666 94.4503C448.465 86.4636 463.524 93.4394 464.637 106.032C468.982 155.179 481.242 204.155 480.143 258C478.143 382 398.143 444 298.143 444C190.143 444 122.143 384 120.143 266C118.994 205.097 124.777 147.165 137.493 92.2036Z" fill="black"/>
+<path d="M212.143 140L162.437 85.9085C154.469 77.2375 140.147 80.7307 137.493 92.2036C124.777 147.165 118.994 205.097 120.143 266C122.143 384 190.143 444 298.143 444C398.143 444 478.143 382 480.143 258C481.242 204.155 468.982 155.179 464.637 106.032C463.524 93.4394 448.465 86.4636 438.666 94.4503L390.143 134M212.143 140C269.476 129.333 328.81 127.333 390.143 134M212.143 140C204.643 141.395 185.643 150.5 176.143 155.5M390.143 134L411.143 140" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path id="Stitches" d="M284.643 123.5L279.143 162M300.143 114.5V160M317.643 120.5L321.143 160" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="Eye L">
+<path id="Vector_7" d="M204.129 319.612C240.432 329.371 276.335 313.203 284.319 283.5C292.304 253.798 269.347 221.808 233.043 212.049C196.74 202.29 160.837 218.458 152.853 248.161C144.868 277.863 167.825 309.853 204.129 319.612Z" fill="white" stroke="black" stroke-width="8"/>
+<path id="Vector_8" d="M209.483 299.693C233.686 306.199 257.381 296.312 262.408 277.61C267.435 258.909 251.891 238.474 227.689 231.968C203.486 225.462 179.791 235.349 174.764 254.051C169.736 272.752 185.281 293.187 209.483 299.693Z" fill="#F7E814" stroke="black" stroke-width="5.15658"/>
+<path id="Vector_9" d="M193.965 236.252L182.453 279.078" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_10" d="M204.321 233.482L190.024 286.666" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_11" d="M214.061 233.004L198.212 291.964" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_12" d="M223.373 234.118L206.827 295.669" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_13" d="M232.283 236.727L215.844 297.879" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_14" d="M240.818 240.73L225.236 298.695" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_15" d="M248.872 246.526L235.11 297.718" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_16" d="M256.282 254.712L245.627 294.351" stroke="black" stroke-width="4" stroke-linecap="round"/>
+</g>
+<g id="Eye R">
+<path id="Vector_17" d="M403.952 315.929C441.518 301.478 462.386 264.846 450.562 234.11C438.738 203.374 398.699 190.173 361.133 204.625C323.567 219.076 302.699 255.708 314.523 286.444C326.347 317.18 366.386 330.381 403.952 315.929Z" fill="white" stroke="black" stroke-width="8"/>
+<path id="Vector_18" d="M396.022 295.317C421.066 285.683 435.333 262.184 427.889 242.832C420.444 223.48 394.106 215.602 369.062 225.237C344.018 234.871 329.751 258.369 337.196 277.722C344.641 297.074 370.978 304.952 396.022 295.317Z" fill="#9155E4" stroke="black" stroke-width="5.52115"/>
+<path id="Vector_19" d="M342.585 250.211L359.633 294.527" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_20" d="M349.799 241.284L370.97 296.318" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_21" d="M357.924 234.727L381.395 295.739" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_22" d="M366.684 229.819L391.186 293.51" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_23" d="M376.039 226.457L400.382 289.736" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_24" d="M385.949 224.538L409.023 284.519" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_25" d="M396.572 224.473L416.951 277.446" stroke="black" stroke-width="4" stroke-linecap="round"/>
+<path id="Vector_26" d="M408.147 226.883L423.927 267.901" stroke="black" stroke-width="4" stroke-linecap="round"/>
+</g>
+<path id="Mouth" d="M285.143 360L295.396 348.958C296.909 347.329 299.46 347.246 301.076 348.774L316.643 363.5" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>
+`;
+
+// Mii-style parts. Each 2D outline is inflated like a soap bubble (a smooth Poisson surface),
+// so a round outline becomes a ball and a strip becomes a round tube, with no creases.
+// Head-on, every part keeps the silhouette from the design.
+//   zCenter: where the part's middle sits front-to-back
+//   depthScale: overall thickness
+//   roundness: 0.5 = full ball / round tube; lower = flatter front, still rounded at the edges
+//   spacing: mesh resolution (SVG units)
+//   inset: shrink the outline (the design's white head outline trims 3px off the black edge)
+const SOLIDS = {
+  'Tail':     { zCenter: -14, depthScale: 0.6,  roundness: 0.4,  spacing: 1 },
+  'Body':     { zCenter: 0,   depthScale: 0.6,  roundness: 0.35, spacing: 2 },
+  'Arm Up L': { zCenter: 0,   depthScale: 0.6,  roundness: 0.38, spacing: 2 },
+  'Arm Up R': { zCenter: 0,   depthScale: 0.6,  roundness: 0.38, spacing: 2 },
+  'Head':     { zCenter: 0,   depthScale: 0.72, roundness: 0.28, spacing: 1.8, inset: 3 },
+};
+
+// The ears are thin shapes of their own on top of the round head ball. Each is cut from the head
+// outline at its inner notch and a point on the side of the head (SVG coordinates from the design);
+// `sink` pushes the ear's base into the ball so they overlap.
+const EARS = {
+  config: { zCenter: 0, depthScale: 0.38, roundness: 0.35, spacing: 1.2 },
+  left:  { notch: [212, 140], tip: [145, 82], side: [125, 178], sink: [28, 22] },
+  right: { notch: [390, 134], tip: [455, 88], side: [473, 172], sink: [-28, 22] },
+};
+const GROUPS = ['Belly', 'Head', 'Eye L', 'Eye R'];
+
+// Which animated part each layer belongs to (details are painted onto that part's surface).
+const PART_OF = {
+  'Tail': 'tail', 'Body': 'body', 'Belly': 'body',
+  'Arm Up L': 'armL', 'Arm Up R': 'armR',
+  'Head': 'head', 'Stitches': 'head', 'Eye L': 'head', 'Eye R': 'head', 'Mouth': 'head',
+};
+const PIVOTS = {
+  body: [298, 577], head: [298, 440], tail: [256, 516], armL: [268, 446], armR: [328, 446],
+};
+
+// ---------- 2D geometry helpers ----------
+function signedArea(poly) {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+
+// Move the outline outward (positive) or inward (negative) along its normals.
+function offsetOutline(poly, amount) {
+  if (!amount) return poly;
+  const sign = signedArea(poly) > 0 ? 1 : -1;
+  const n = poly.length;
+  return poly.map(([x, y], i) => {
+    const [px, py] = poly[(i - 1 + n) % n], [nx, ny] = poly[(i + 1) % n];
+    let tx = nx - px, ty = ny - py;
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len; ty /= len;
+    return [x + ty * amount * sign, y - tx * amount * sign];
+  });
+}
+
+function insidePoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function distToPoly(x, y, poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    const ex = ax + t * dx - x, ey = ay + t * dy - y;
+    best = Math.min(best, ex * ex + ey * ey);
+  }
+  return Math.sqrt(best);
+}
+
+function shapeOutline(shape, spacing) {
+  return shape.getSpacedPoints(Math.max(8, Math.ceil(shape.getLength() / spacing))).slice(0, -1).map((v) => [v.x, v.y]);
+}
+
+// Add evenly spaced points along a straight closing edge (last point back to the first).
+function closeWithLine(arc, spacing) {
+  const [x0, y0] = arc[arc.length - 1], [x1, y1] = arc[0];
+  const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing);
+  const out = arc.slice();
+  for (let k = 1; k < steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+  return out;
+}
+
+// Even triangle mesh filling an outline: boundary points first, then a staggered interior lattice.
+function latticeMesh(poly, spacing) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of poly) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const pts = poly.map((p) => p.slice());
+  const rowH = spacing * 0.866;
+  for (let row = 0, y = minY + rowH / 2; y < maxY; row++, y += rowH) {
+    for (let x = minX + (row % 2 ? spacing / 2 : 0); x < maxX; x += spacing) {
+      if (insidePoly(x, y, poly) && distToPoly(x, y, poly) >= spacing * 0.5) pts.push([x, y]);
+    }
+  }
+  const tri = Delaunator.from(pts).triangles;
+  const faces = [];
+  for (let i = 0; i < tri.length; i += 3) {
+    const a = tri[i], b = tri[i + 1], c = tri[i + 2];
+    const cx = (pts[a][0] + pts[b][0] + pts[c][0]) / 3;
+    const cy = (pts[a][1] + pts[b][1] + pts[c][1]) / 3;
+    if (insidePoly(cx, cy, poly)) faces.push([a, b, c]);
+  }
+  return { pts, faces };
+}
+
+// Split one ear off the head outline, cutting from the notch to a point on the side of the head.
+// The ear's base reaches into the head ball so the two overlap with no gap.
+function splitEar(poly, { notch, tip, side, sink }, spacing) {
+  const nearest = ([px, py]) => {
+    let best = 0, bd = Infinity;
+    poly.forEach(([x, y], i) => { const d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+  const n = poly.length;
+  const arc = (a, b) => { const out = []; for (let i = a; ; i = (i + 1) % n) { out.push(poly[i]); if (i === b) break; } return out; };
+  const iN = nearest(notch), iS = nearest(side), tipPt = poly[nearest(tip)];
+  let ear = arc(iN, iS), rest = arc(iS, iN);
+  if (!ear.includes(tipPt)) [ear, rest] = [rest, ear];
+
+  const [ax, ay] = ear[0], [bx, by] = ear[ear.length - 1];
+  const earPoly = ear.slice();
+  appendLine(earPoly, [(ax + bx) / 2 + sink[0], (ay + by) / 2 + sink[1]], spacing);
+  return { ear: closeWithLine(earPoly, spacing), rest: closeWithLine(rest, spacing) };
+}
+
+function appendLine(out, [x1, y1], spacing) {
+  const [x0, y0] = out[out.length - 1];
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing));
+  for (let k = 1; k <= steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+}
+
+// ---------- inflated solid ----------
+function inflate(poly, { zCenter, depthScale, roundness, spacing }) {
+  const { pts, faces } = latticeMesh(poly, spacing);
+  const nb = poly.length, N = pts.length;
+
+  // Soap-bubble surface: solve  ∇²h = -4  with h = 0 on the outline (cotangent Laplacian, SOR).
+  // For a circle of radius R this gives h = R² - r², so sqrt(h) is exactly a sphere.
+  const nbrs = Array.from({ length: N }, () => new Map());
+  const area = new Float64Array(N);
+  const cot = (o, p, q) => {
+    const ux = pts[p][0] - pts[o][0], uy = pts[p][1] - pts[o][1];
+    const vx = pts[q][0] - pts[o][0], vy = pts[q][1] - pts[o][1];
+    return (ux * vx + uy * vy) / Math.abs(ux * vy - uy * vx || 1e-9);
+  };
+  const addW = (i, j, w) => {
+    nbrs[i].set(j, (nbrs[i].get(j) || 0) + w);
+    nbrs[j].set(i, (nbrs[j].get(i) || 0) + w);
+  };
+  for (const [a, b, c] of faces) {
+    addW(b, c, cot(a, b, c) / 2);
+    addW(c, a, cot(b, c, a) / 2);
+    addW(a, b, cot(c, a, b) / 2);
+    const A = Math.abs((pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[b][1] - pts[a][1]) * (pts[c][0] - pts[a][0])) / 2;
+    area[a] += A / 3; area[b] += A / 3; area[c] += A / 3;
+  }
+  const lists = nbrs.map((m) => [...m].map(([j, w]) => [j, Math.max(w, 0)]));
+  const h = new Float64Array(N);
+  const iters = Math.ceil(4 * Math.sqrt(N));
+  const omega = 1.9;
+  for (let it = 0; it < iters; it++) {
+    for (let i = nb; i < N; i++) {
+      let sw = 0, sh = 0;
+      for (const [j, w] of lists[i]) { sw += w; sh += w * h[j]; }
+      if (sw > 0) h[i] += omega * ((sh + 4 * area[i]) / sw - h[i]);
+    }
+  }
+  // roundness 0.5 = sphere / round tube; lower = flatter front with rounded edges (a pebble, not a balloon).
+  let hMax = 0;
+  for (let i = 0; i < N; i++) hMax = Math.max(hMax, h[i]);
+  const height = (i) => depthScale * Math.sqrt(hMax) * Math.pow(Math.max(h[i], 0) / hMax, roundness);
+
+  // Front surface uses indices 0..N-1; the back reuses the boundary vertices so the seam is shared.
+  const positions = [];
+  for (let i = 0; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter + height(i));
+  for (let i = nb; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter - height(i));
+  const backIndex = (i) => (i < nb ? i : N + (i - nb));
+
+  // Make the front faces point toward +z.
+  const [a0, b0, c0] = faces[0];
+  const cross = (pts[b0][0] - pts[a0][0]) * (pts[c0][1] - pts[a0][1]) - (pts[b0][1] - pts[a0][1]) * (pts[c0][0] - pts[a0][0]);
+  const index = [];
+  for (const [a, b, c] of faces) {
+    if (cross > 0) index.push(a, b, c, backIndex(a), backIndex(c), backIndex(b));
+    else index.push(a, c, b, backIndex(a), backIndex(b), backIndex(c));
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+
+  // Point lookup on the front surface: interpolated height and normal at any (x, y).
+  const P = geometry.attributes.position.array, Nrm = geometry.attributes.normal.array;
+  const cell = spacing * 3;
+  const buckets = new Map();
+  const key = (i, j) => i * 100003 + j;
+  faces.forEach((f, fi) => {
+    const xs = f.map((v) => pts[v][0]), ys = f.map((v) => pts[v][1]);
+    for (let i = Math.floor(Math.min(...xs) / cell); i <= Math.floor(Math.max(...xs) / cell); i++) {
+      for (let j = Math.floor(Math.min(...ys) / cell); j <= Math.floor(Math.max(...ys) / cell); j++) {
+        const k = key(i, j);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(fi);
+      }
+    }
+  });
+  const surfaceAt = (x, y) => {
+    for (const fi of buckets.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []) {
+      const [a, b, c] = faces[fi];
+      const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c];
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+      const u = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / d;
+      const v = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d;
+      const w = 1 - u - v;
+      if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+      const n = new THREE.Vector3(
+        u * Nrm[a * 3] + v * Nrm[b * 3] + w * Nrm[c * 3],
+        u * Nrm[a * 3 + 1] + v * Nrm[b * 3 + 1] + w * Nrm[c * 3 + 1],
+        u * Nrm[a * 3 + 2] + v * Nrm[b * 3 + 2] + w * Nrm[c * 3 + 2],
+      ).normalize();
+      return { z: u * P[a * 3 + 2] + v * P[b * 3 + 2] + w * P[c * 3 + 2], n };
+    }
+    return null;
+  };
+
+  return { geometry, surfaceAt, poly };
+}
+
+// ---------- painted details, wrapped onto a part's surface ----------
+// Uniform 1→4 splits (every triangle the same number of times) so neighbouring triangles
+// share their new vertices exactly and no hairline cracks open when the paint is curved.
+function subdivideUniform(src, maxLen) {
+  let longest = 0;
+  for (let i = 0; i < src.length; i += 9) {
+    for (let k = 0; k < 3; k++) {
+      const a = i + k * 3, b = i + ((k + 1) % 3) * 3;
+      longest = Math.max(longest, Math.hypot(src[a] - src[b], src[a + 1] - src[b + 1]));
+    }
+  }
+  let tris = src;
+  for (let level = Math.ceil(Math.log2(Math.max(longest / maxLen, 1))); level > 0; level--) {
+    const out = [];
+    for (let i = 0; i < tris.length; i += 9) {
+      const A = [tris[i], tris[i + 1]], B = [tris[i + 3], tris[i + 4]], C = [tris[i + 6], tris[i + 7]];
+      const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      const AB = mid(A, B), BC = mid(B, C), CA = mid(C, A);
+      for (const [p, q, r] of [[A, AB, CA], [AB, B, BC], [CA, BC, C], [AB, BC, CA]]) out.push(p[0], p[1], 0, q[0], q[1], 0, r[0], r[1], 0);
+    }
+    tris = out;
+  }
+  return tris;
+}
+
+// A filled shape as an even triangle mesh (flat x, y, 0 triangles).
+function fillTriangles(path, spacing) {
+  const out = [];
+  for (const shape of SVGLoader.createShapes(path)) {
+    const { pts, faces } = latticeMesh(shapeOutline(shape, spacing), spacing);
+    for (const f of faces) for (const v of f) out.push(pts[v][0], pts[v][1], 0);
+  }
+  return out;
+}
+
+function strokeTriangles(sub, style) {
+  const geo = SVGLoader.pointsToStroke(sub.getPoints(), style);
+  if (!geo) return [];
+  return subdivideUniform(Array.from((geo.index ? geo.toNonIndexed() : geo).attributes.position.array), 2);
+}
+
+// Paint that falls outside the part's silhouette is dropped: in the 2D design it sits on the
+// white background, so it isn't visible there either.
+function decal(src, solid, lift, material) {
+  const pos = [], nrm = [];
+  for (let i = 0; i < src.length; i += 9) {
+    // Wind every triangle the same way as the solids' front faces so lighting treats it as front-facing.
+    const cross = (src[i + 3] - src[i]) * (src[i + 7] - src[i + 1]) - (src[i + 4] - src[i + 1]) * (src[i + 6] - src[i]);
+    const order = cross > 0 ? [0, 1, 2] : [0, 2, 1];
+    const hits = order.map((k) => solid.surfaceAt(src[i + k * 3], src[i + k * 3 + 1]));
+    if (hits.some((s) => !s)) continue;
+    hits.forEach((s, j) => {
+      const k = order[j];
+      pos.push(src[i + k * 3] + s.n.x * lift, src[i + k * 3 + 1] + s.n.y * lift, s.z + s.n.z * lift);
+      nrm.push(s.n.x, s.n.y, s.n.z);
+    });
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  return new THREE.Mesh(g, material);
+}
+
+function onSilhouette(sub, solid, tolerance) {
+  return sub.getSpacedPoints(24).every((p) => distToPoly(p.x, p.y, solid.poly) < tolerance);
+}
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#ffffff');
+
+const camera = new THREE.PerspectiveCamera(30, 1, 10, 6000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.target.set(0, 255, 0);
+
+// Cartoon (cel) shading, like a 3D game character: flat colour on the lit side, one crisp
+// shadow band, and a rim highlight on the black parts so their shape reads. No gloss.
+const LIGHT_WORLD = new THREE.Vector3(-0.45, 0.7, 0.9).normalize();
+const lightDirView = { value: new THREE.Vector3() };
+
+const TOON_VERTEX = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDir = -mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const TOON_FRAGMENT = `
+  uniform vec3 uColor;
+  uniform vec3 uRim;
+  uniform float uShadow;
+  uniform vec3 uLightDir;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vec3 n = normalize(vNormal);
+    if (!gl_FrontFacing) n = -n;
+    vec3 v = normalize(vViewDir);
+    float ndl = dot(n, uLightDir);
+    float lit = mix(uShadow, 1.0, smoothstep(-0.03, 0.03, ndl));
+    float edge = 1.0 - max(dot(n, v), 0.0);
+    float rim = smoothstep(0.6, 0.64, edge) * smoothstep(-0.1, 0.2, ndl);
+    gl_FragColor = vec4(uColor * lit + uRim * rim, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+function toonMaterial(css, { rim = '#000000', shadow = 0.72, side = THREE.FrontSide, offset = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color().setStyle(css) },
+      uRim: { value: new THREE.Color().setStyle(rim) },
+      uShadow: { value: shadow },
+      uLightDir: lightDirView,
+    },
+    vertexShader: TOON_VERTEX,
+    fragmentShader: TOON_FRAGMENT,
+    side,
+    polygonOffset: offset !== 0,
+    polygonOffsetFactor: offset ? -2 : 0,
+    polygonOffsetUnits: offset,
+  });
+}
+
+// Shadow ellipse from the design (#CCCCCC, rx 98.5), laid flat on the floor.
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 96).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: '#CCCCCC' })
+);
+shadow.scale.set(98.5, 1, 75);
+shadow.position.set(0.5, 0.1, 0);
+scene.add(shadow);
+
+// cat: world-space group (turntable sway + breathing, scaled from the feet).
+// svgRoot: flips SVG's y-down coordinates and puts the bottom of the feet (y 577) on the floor.
+const cat = new THREE.Group();
+scene.add(cat);
+const svgRoot = new THREE.Group();
+svgRoot.scale.y = -1;
+svgRoot.position.set(-298, 577, 0);
+cat.add(svgRoot);
+
+const parts = {};
+for (const [name, [px, py]] of Object.entries(PIVOTS)) {
+  const pivot = new THREE.Group();
+  pivot.position.set(px, py, 0);
+  const inner = new THREE.Group();
+  inner.position.set(-px, -py, 0);
+  pivot.add(inner);
+  svgRoot.add(pivot);
+  parts[name] = { pivot, inner, rest: [px, py] };
+}
+
+// Black parts: two flat tones (very dark grey where lit, pure black in shadow) instead of a shiny rim.
+const solidMaterial = toonMaterial('#1f1f1f', { shadow: 0 });
+let layer = 0;
+function paintMaterial(css) {
+  layer++;
+  return toonMaterial(css, { side: THREE.DoubleSide, offset: -4 * layer });
+}
+
+const painted = (v) => v !== undefined && v !== 'none' && v !== 'transparent';
+const solids = {};
+const stackDepth = {};
+const LIFT = 0.35;
+
+const data = new SVGLoader().parse(CAT_SVG);
+for (const path of data.paths) {
+  const node = path.userData.node;
+  const name = GROUPS.includes(node.parentNode.id) ? node.parentNode.id : node.id;
+  const part = PART_OF[name];
+  const style = path.userData.style;
+  const target = parts[part].inner;
+
+  if (SOLIDS[name] && painted(style.fill)) {
+    const cfg = SOLIDS[name];
+    const outline = painted(style.stroke) ? style.strokeWidth : 0;
+    const poly = offsetOutline(shapeOutline(SVGLoader.createShapes(path)[0], cfg.spacing), outline / 2 - (cfg.inset || 0));
+
+    if (name !== 'Head') {
+      const solid = inflate(poly, cfg);
+      target.add(new THREE.Mesh(solid.geometry, solidMaterial));
+      solids[part] = solid;
+      continue;
+    }
+
+    // Head = round ball + two thin ears. Paint lands on whichever surface is in front.
+    const left = splitEar(poly, EARS.left, cfg.spacing);
+    const right = splitEar(left.rest, EARS.right, cfg.spacing);
+    const pieces = [inflate(right.rest, cfg), inflate(left.ear, EARS.config), inflate(right.ear, EARS.config)];
+    for (const p of pieces) target.add(new THREE.Mesh(p.geometry, solidMaterial));
+    solids[part] = {
+      poly,
+      surfaceAt: (x, y) => pieces.map((p) => p.surfaceAt(x, y)).filter(Boolean).sort((a, b) => b.z - a.z)[0] || null,
+    };
+    continue;
+  }
+
+  // Details in SVG paint order: each later layer sits a hair higher (and gets a stronger depth
+  // offset) so it draws on top. Within a group the stack is capped: the stripes never overlap
+  // each other, so they can share one height.
+  const solid = solids[part];
+  const nextLift = () => {
+    stackDepth[name] = Math.min((stackDepth[name] || 0) + 1, 5);
+    return LIFT * stackDepth[name];
+  };
+  if (painted(style.fill)) {
+    target.add(decal(fillTriangles(path, 1.5), solid, nextLift(), paintMaterial(style.fill)));
+  }
+  if (painted(style.stroke)) {
+    const material = paintMaterial(style.stroke);
+    const lift = nextLift();
+    for (const sub of path.subPaths) {
+      // Strokes drawn along the silhouette only trim the edge (already applied as the solid's inset).
+      if (onSilhouette(sub, solid, style.strokeWidth)) continue;
+      target.add(decal(strokeTriangles(sub, style), solid, lift, material));
+    }
+  }
+}
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  // Half-height / half-width to keep in view (the head sticks out toward the camera, so pad generously).
+  const fitH = 340 / Math.tan(halfFov);
+  const fitW = 300 / (Math.tan(halfFov) * camera.aspect);
+  const dist = Math.max(fitH, fitW);
+  camera.position.set(0, 255, dist);
+  controls.minDistance = dist * 0.5;
+  controls.maxDistance = dist * 2;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Idle: slow weight shift, breathing, head bob, arm sway, tail flick.
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  const breath = Math.sin(t * 2.2);
+
+  cat.rotation.y = Math.sin(t * 0.6) * 0.45;
+  cat.scale.y = 1 + breath * 0.008;
+
+  const head = parts.head;
+  head.pivot.position.y = head.rest[1] + Math.sin(t * 2.2 - 0.6) * 2.5;
+  head.pivot.rotation.z = Math.sin(t * 1.1) * 0.025;
+
+  parts.armL.pivot.rotation.z = Math.sin(t * 2.2 - 0.3) * 0.035;
+  parts.armR.pivot.rotation.z = -Math.sin(t * 2.2 - 0.3) * 0.035;
+
+  parts.tail.pivot.rotation.z = Math.sin(t * 2.6) * 0.18;
+
+  controls.update();
+  camera.updateMatrixWorld();
+  lightDirView.value.copy(LIGHT_WORLD).transformDirection(camera.matrixWorldInverse);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
