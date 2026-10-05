@@ -463,7 +463,7 @@ function angerMarkPath({ x, y, r, gap }) {
 const FACES = {
   idle:    { mouth: MOUTH.idle },
   happy:   { mouth: MOUTH.smile, closedEyes: true },
-  mad:     { mouth: MOUTH.pout },
+  mad:     { mouth: MOUTH.pout, closedEyes: true },
   excited: { mouth: MOUTH.smile },
 };
 
@@ -526,7 +526,7 @@ async function angerMarkTexture() {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('xmlns', SVG_NS);
   const mark = whiteStroke(document, angerMarkPath(ANGER_MARK), 6);
-  mark.setAttribute('stroke', '#FF3B3B');
+  mark.setAttribute('stroke', '#FFFFFF');
   svg.appendChild(mark);
   return svgToTexture(svg);
 }
