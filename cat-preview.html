@@ -13,7 +13,8 @@
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "delaunator": "https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm"
       }
     }
   </script>
@@ -23,6 +24,7 @@
 import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import Delaunator from 'delaunator';
 
 // Vector source: Figma "Cat Character" > frame "USE THIS CLAUDE" (same paths as assets/images/cat.svg).
 // Kept in raw frame coordinates (0 0 600 640) so the parts line up exactly as designed.
@@ -75,19 +77,32 @@ const CAT_SVG = `
 </svg>
 `;
 
-// Extruded parts: z = back of the extrusion, depth = thickness (SVG units).
-// The design's own outline stroke (same colour as the fill) becomes the bevel,
-// so the silhouette seen head-on matches the 2D drawing.
+// Mii-style parts. Each 2D outline is inflated like a soap bubble (a smooth Poisson surface),
+// so a round outline becomes a ball and a strip becomes a round tube, with no creases.
+// Head-on, every part keeps the silhouette from the design.
+//   zCenter: where the part's middle sits front-to-back
+//   depthScale: 1 = ball for round shapes; ~0.7 = round cross-section for long shapes
+//   spacing: mesh resolution (SVG units)
+//   inset: shrink the outline (the design's white head outline trims 3px off the black edge)
 const SOLIDS = {
-  'Tail':     { z: -6,  depth: 8 },
-  'Body':     { z: -20, depth: 40 },
-  'Arm Up L': { z: -5,  depth: 30 },
-  'Arm Up R': { z: -5,  depth: 30 },
-  'Head':     { z: -40, depth: 80 },
+  'Tail':     { zCenter: -14, depthScale: 0.7,  spacing: 1 },
+  'Body':     { zCenter: 0,   depthScale: 0.72, spacing: 2 },
+  'Arm Up L': { zCenter: 0,   depthScale: 0.7,  spacing: 2 },
+  'Arm Up R': { zCenter: 0,   depthScale: 0.7,  spacing: 2 },
+  'Head':     { zCenter: 0,   depthScale: 0.9,  spacing: 1.8, inset: 3 },
+};
+
+// The ears are thin shapes of their own on top of the round head ball. Each is cut from the head
+// outline at its inner notch and a point on the side of the head (SVG coordinates from the design);
+// `sink` pushes the ear's base into the ball so they overlap.
+const EARS = {
+  config: { zCenter: 0, depthScale: 0.42, spacing: 1.2 },
+  left:  { notch: [212, 140], tip: [145, 82], side: [125, 178], sink: [28, 22] },
+  right: { notch: [390, 134], tip: [455, 88], side: [473, 172], sink: [-28, 22] },
 };
 const GROUPS = ['Belly', 'Head', 'Eye L', 'Eye R'];
 
-// Which animated part each layer belongs to, and which surface its flat details sit on.
+// Which animated part each layer belongs to (details are painted onto that part's surface).
 const PART_OF = {
   'Tail': 'tail', 'Body': 'body', 'Belly': 'body',
   'Arm Up L': 'armL', 'Arm Up R': 'armR',
@@ -97,6 +112,278 @@ const PIVOTS = {
   body: [298, 577], head: [298, 440], tail: [256, 516], armL: [268, 446], armR: [328, 446],
 };
 
+// ---------- 2D geometry helpers ----------
+function signedArea(poly) {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+
+// Move the outline outward (positive) or inward (negative) along its normals.
+function offsetOutline(poly, amount) {
+  if (!amount) return poly;
+  const sign = signedArea(poly) > 0 ? 1 : -1;
+  const n = poly.length;
+  return poly.map(([x, y], i) => {
+    const [px, py] = poly[(i - 1 + n) % n], [nx, ny] = poly[(i + 1) % n];
+    let tx = nx - px, ty = ny - py;
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len; ty /= len;
+    return [x + ty * amount * sign, y - tx * amount * sign];
+  });
+}
+
+function insidePoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function distToPoly(x, y, poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    const ex = ax + t * dx - x, ey = ay + t * dy - y;
+    best = Math.min(best, ex * ex + ey * ey);
+  }
+  return Math.sqrt(best);
+}
+
+function shapeOutline(shape, spacing) {
+  return shape.getSpacedPoints(Math.max(8, Math.ceil(shape.getLength() / spacing))).slice(0, -1).map((v) => [v.x, v.y]);
+}
+
+// Add evenly spaced points along a straight closing edge (last point back to the first).
+function closeWithLine(arc, spacing) {
+  const [x0, y0] = arc[arc.length - 1], [x1, y1] = arc[0];
+  const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing);
+  const out = arc.slice();
+  for (let k = 1; k < steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+  return out;
+}
+
+// Even triangle mesh filling an outline: boundary points first, then a staggered interior lattice.
+function latticeMesh(poly, spacing) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of poly) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const pts = poly.map((p) => p.slice());
+  const rowH = spacing * 0.866;
+  for (let row = 0, y = minY + rowH / 2; y < maxY; row++, y += rowH) {
+    for (let x = minX + (row % 2 ? spacing / 2 : 0); x < maxX; x += spacing) {
+      if (insidePoly(x, y, poly) && distToPoly(x, y, poly) >= spacing * 0.5) pts.push([x, y]);
+    }
+  }
+  const tri = Delaunator.from(pts).triangles;
+  const faces = [];
+  for (let i = 0; i < tri.length; i += 3) {
+    const a = tri[i], b = tri[i + 1], c = tri[i + 2];
+    const cx = (pts[a][0] + pts[b][0] + pts[c][0]) / 3;
+    const cy = (pts[a][1] + pts[b][1] + pts[c][1]) / 3;
+    if (insidePoly(cx, cy, poly)) faces.push([a, b, c]);
+  }
+  return { pts, faces };
+}
+
+// Split one ear off the head outline, cutting from the notch to a point on the side of the head.
+// The ear's base reaches into the head ball so the two overlap with no gap.
+function splitEar(poly, { notch, tip, side, sink }, spacing) {
+  const nearest = ([px, py]) => {
+    let best = 0, bd = Infinity;
+    poly.forEach(([x, y], i) => { const d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+  const n = poly.length;
+  const arc = (a, b) => { const out = []; for (let i = a; ; i = (i + 1) % n) { out.push(poly[i]); if (i === b) break; } return out; };
+  const iN = nearest(notch), iS = nearest(side), tipPt = poly[nearest(tip)];
+  let ear = arc(iN, iS), rest = arc(iS, iN);
+  if (!ear.includes(tipPt)) [ear, rest] = [rest, ear];
+
+  const [ax, ay] = ear[0], [bx, by] = ear[ear.length - 1];
+  const earPoly = ear.slice();
+  appendLine(earPoly, [(ax + bx) / 2 + sink[0], (ay + by) / 2 + sink[1]], spacing);
+  return { ear: closeWithLine(earPoly, spacing), rest: closeWithLine(rest, spacing) };
+}
+
+function appendLine(out, [x1, y1], spacing) {
+  const [x0, y0] = out[out.length - 1];
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / spacing));
+  for (let k = 1; k <= steps; k++) out.push([x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps]);
+}
+
+// ---------- inflated solid ----------
+function inflate(poly, { zCenter, depthScale, spacing }) {
+  const { pts, faces } = latticeMesh(poly, spacing);
+  const nb = poly.length, N = pts.length;
+
+  // Soap-bubble surface: solve  ∇²h = -4  with h = 0 on the outline (cotangent Laplacian, SOR).
+  // For a circle of radius R this gives h = R² - r², so sqrt(h) is exactly a sphere.
+  const nbrs = Array.from({ length: N }, () => new Map());
+  const area = new Float64Array(N);
+  const cot = (o, p, q) => {
+    const ux = pts[p][0] - pts[o][0], uy = pts[p][1] - pts[o][1];
+    const vx = pts[q][0] - pts[o][0], vy = pts[q][1] - pts[o][1];
+    return (ux * vx + uy * vy) / Math.abs(ux * vy - uy * vx || 1e-9);
+  };
+  const addW = (i, j, w) => {
+    nbrs[i].set(j, (nbrs[i].get(j) || 0) + w);
+    nbrs[j].set(i, (nbrs[j].get(i) || 0) + w);
+  };
+  for (const [a, b, c] of faces) {
+    addW(b, c, cot(a, b, c) / 2);
+    addW(c, a, cot(b, c, a) / 2);
+    addW(a, b, cot(c, a, b) / 2);
+    const A = Math.abs((pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[b][1] - pts[a][1]) * (pts[c][0] - pts[a][0])) / 2;
+    area[a] += A / 3; area[b] += A / 3; area[c] += A / 3;
+  }
+  const lists = nbrs.map((m) => [...m].map(([j, w]) => [j, Math.max(w, 0)]));
+  const h = new Float64Array(N);
+  const iters = Math.ceil(4 * Math.sqrt(N));
+  const omega = 1.9;
+  for (let it = 0; it < iters; it++) {
+    for (let i = nb; i < N; i++) {
+      let sw = 0, sh = 0;
+      for (const [j, w] of lists[i]) { sw += w; sh += w * h[j]; }
+      if (sw > 0) h[i] += omega * ((sh + 4 * area[i]) / sw - h[i]);
+    }
+  }
+  const height = (i) => depthScale * Math.sqrt(Math.max(h[i], 0));
+
+  // Front surface uses indices 0..N-1; the back reuses the boundary vertices so the seam is shared.
+  const positions = [];
+  for (let i = 0; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter + height(i));
+  for (let i = nb; i < N; i++) positions.push(pts[i][0], pts[i][1], zCenter - height(i));
+  const backIndex = (i) => (i < nb ? i : N + (i - nb));
+
+  // Make the front faces point toward +z.
+  const [a0, b0, c0] = faces[0];
+  const cross = (pts[b0][0] - pts[a0][0]) * (pts[c0][1] - pts[a0][1]) - (pts[b0][1] - pts[a0][1]) * (pts[c0][0] - pts[a0][0]);
+  const index = [];
+  for (const [a, b, c] of faces) {
+    if (cross > 0) index.push(a, b, c, backIndex(a), backIndex(c), backIndex(b));
+    else index.push(a, c, b, backIndex(a), backIndex(b), backIndex(c));
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+
+  // Point lookup on the front surface: interpolated height and normal at any (x, y).
+  const P = geometry.attributes.position.array, Nrm = geometry.attributes.normal.array;
+  const cell = spacing * 3;
+  const buckets = new Map();
+  const key = (i, j) => i * 100003 + j;
+  faces.forEach((f, fi) => {
+    const xs = f.map((v) => pts[v][0]), ys = f.map((v) => pts[v][1]);
+    for (let i = Math.floor(Math.min(...xs) / cell); i <= Math.floor(Math.max(...xs) / cell); i++) {
+      for (let j = Math.floor(Math.min(...ys) / cell); j <= Math.floor(Math.max(...ys) / cell); j++) {
+        const k = key(i, j);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(fi);
+      }
+    }
+  });
+  const surfaceAt = (x, y) => {
+    for (const fi of buckets.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []) {
+      const [a, b, c] = faces[fi];
+      const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c];
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+      const u = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / d;
+      const v = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d;
+      const w = 1 - u - v;
+      if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+      const n = new THREE.Vector3(
+        u * Nrm[a * 3] + v * Nrm[b * 3] + w * Nrm[c * 3],
+        u * Nrm[a * 3 + 1] + v * Nrm[b * 3 + 1] + w * Nrm[c * 3 + 1],
+        u * Nrm[a * 3 + 2] + v * Nrm[b * 3 + 2] + w * Nrm[c * 3 + 2],
+      ).normalize();
+      return { z: u * P[a * 3 + 2] + v * P[b * 3 + 2] + w * P[c * 3 + 2], n };
+    }
+    return null;
+  };
+
+  return { geometry, surfaceAt, poly };
+}
+
+// ---------- painted details, wrapped onto a part's surface ----------
+// Uniform 1→4 splits (every triangle the same number of times) so neighbouring triangles
+// share their new vertices exactly and no hairline cracks open when the paint is curved.
+function subdivideUniform(src, maxLen) {
+  let longest = 0;
+  for (let i = 0; i < src.length; i += 9) {
+    for (let k = 0; k < 3; k++) {
+      const a = i + k * 3, b = i + ((k + 1) % 3) * 3;
+      longest = Math.max(longest, Math.hypot(src[a] - src[b], src[a + 1] - src[b + 1]));
+    }
+  }
+  let tris = src;
+  for (let level = Math.ceil(Math.log2(Math.max(longest / maxLen, 1))); level > 0; level--) {
+    const out = [];
+    for (let i = 0; i < tris.length; i += 9) {
+      const A = [tris[i], tris[i + 1]], B = [tris[i + 3], tris[i + 4]], C = [tris[i + 6], tris[i + 7]];
+      const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      const AB = mid(A, B), BC = mid(B, C), CA = mid(C, A);
+      for (const [p, q, r] of [[A, AB, CA], [AB, B, BC], [CA, BC, C], [AB, BC, CA]]) out.push(p[0], p[1], 0, q[0], q[1], 0, r[0], r[1], 0);
+    }
+    tris = out;
+  }
+  return tris;
+}
+
+// A filled shape as an even triangle mesh (flat x, y, 0 triangles).
+function fillTriangles(path, spacing) {
+  const out = [];
+  for (const shape of SVGLoader.createShapes(path)) {
+    const { pts, faces } = latticeMesh(shapeOutline(shape, spacing), spacing);
+    for (const f of faces) for (const v of f) out.push(pts[v][0], pts[v][1], 0);
+  }
+  return out;
+}
+
+function strokeTriangles(sub, style) {
+  const geo = SVGLoader.pointsToStroke(sub.getPoints(), style);
+  if (!geo) return [];
+  return subdivideUniform(Array.from((geo.index ? geo.toNonIndexed() : geo).attributes.position.array), 2);
+}
+
+// Paint that falls outside the part's silhouette is dropped: in the 2D design it sits on the
+// white background, so it isn't visible there either.
+function decal(src, solid, lift, material) {
+  const pos = [], nrm = [];
+  for (let i = 0; i < src.length; i += 9) {
+    // Wind every triangle the same way as the solids' front faces so lighting treats it as front-facing.
+    const cross = (src[i + 3] - src[i]) * (src[i + 7] - src[i + 1]) - (src[i + 4] - src[i + 1]) * (src[i + 6] - src[i]);
+    const order = cross > 0 ? [0, 1, 2] : [0, 2, 1];
+    const hits = order.map((k) => solid.surfaceAt(src[i + k * 3], src[i + k * 3 + 1]));
+    if (hits.some((s) => !s)) continue;
+    hits.forEach((s, j) => {
+      const k = order[j];
+      pos.push(src[i + k * 3] + s.n.x * lift, src[i + k * 3 + 1] + s.n.y * lift, s.z + s.n.z * lift);
+      nrm.push(s.n.x, s.n.y, s.n.z);
+    });
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  return new THREE.Mesh(g, material);
+}
+
+function onSilhouette(sub, solid, tolerance) {
+  return sub.getSpacedPoints(24).every((p) => distToPoly(p.x, p.y, solid.poly) < tolerance);
+}
+
+// ---------- scene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
@@ -110,13 +397,57 @@ controls.enableDamping = true;
 controls.enablePan = false;
 controls.target.set(0, 255, 0);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const key = new THREE.DirectionalLight(0xffffff, 2.2);
-key.position.set(-400, 700, 900);
-scene.add(key);
-const rim = new THREE.DirectionalLight(0xffffff, 1.2);
-rim.position.set(600, 300, -500);
-scene.add(rim);
+// Cartoon (cel) shading, like a 3D game character: flat colour on the lit side, one crisp
+// shadow band, and a rim highlight on the black parts so their shape reads. No gloss.
+const LIGHT_WORLD = new THREE.Vector3(-0.45, 0.7, 0.9).normalize();
+const lightDirView = { value: new THREE.Vector3() };
+
+const TOON_VERTEX = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDir = -mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const TOON_FRAGMENT = `
+  uniform vec3 uColor;
+  uniform vec3 uRim;
+  uniform float uShadow;
+  uniform vec3 uLightDir;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vec3 n = normalize(vNormal);
+    if (!gl_FrontFacing) n = -n;
+    vec3 v = normalize(vViewDir);
+    float ndl = dot(n, uLightDir);
+    float lit = mix(uShadow, 1.0, smoothstep(-0.03, 0.03, ndl));
+    float edge = 1.0 - max(dot(n, v), 0.0);
+    float rim = smoothstep(0.6, 0.64, edge) * smoothstep(-0.1, 0.2, ndl);
+    gl_FragColor = vec4(uColor * lit + uRim * rim, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+function toonMaterial(css, { rim = '#000000', shadow = 0.72, side = THREE.FrontSide, offset = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color().setStyle(css) },
+      uRim: { value: new THREE.Color().setStyle(rim) },
+      uShadow: { value: shadow },
+      uLightDir: lightDirView,
+    },
+    vertexShader: TOON_VERTEX,
+    fragmentShader: TOON_FRAGMENT,
+    side,
+    polygonOffset: offset !== 0,
+    polygonOffsetFactor: offset ? -2 : 0,
+    polygonOffsetUnits: offset,
+  });
+}
 
 // Shadow ellipse from the design (#CCCCCC, rx 98.5), laid flat on the floor.
 const shadow = new THREE.Mesh(
@@ -147,19 +478,17 @@ for (const [name, [px, py]] of Object.entries(PIVOTS)) {
   parts[name] = { pivot, inner, rest: [px, py] };
 }
 
-const solidMaterial = new THREE.MeshPhongMaterial({ color: 0x000000, specular: 0x3a3a3a, shininess: 35 });
-const flatMaterials = new Map();
-function flatMaterial(css) {
-  if (!flatMaterials.has(css)) {
-    flatMaterials.set(css, new THREE.MeshBasicMaterial({ color: new THREE.Color().setStyle(css), side: THREE.DoubleSide }));
-  }
-  return flatMaterials.get(css);
+const solidMaterial = toonMaterial('#000000', { rim: '#5a5a5a' });
+let layer = 0;
+function paintMaterial(css) {
+  layer++;
+  return toonMaterial(css, { side: THREE.DoubleSide, offset: -4 * layer });
 }
 
 const painted = (v) => v !== undefined && v !== 'none' && v !== 'transparent';
-const surfaceZ = {};   // front face z of each solid, where its details are layered
-const layerZ = {};     // next free z on that surface (keeps SVG paint order)
-const LAYER_STEP = 0.3;
+const solids = {};
+const stackDepth = {};
+const LIFT = 0.35;
 
 const data = new SVGLoader().parse(CAT_SVG);
 for (const path of data.paths) {
@@ -170,35 +499,49 @@ for (const path of data.paths) {
   const target = parts[part].inner;
 
   if (SOLIDS[name] && painted(style.fill)) {
-    const { z, depth } = SOLIDS[name];
-    const bevel = painted(style.stroke) ? style.strokeWidth / 2 : 3;
-    const geo = new THREE.ExtrudeGeometry(SVGLoader.createShapes(path), {
-      depth, curveSegments: 32,
-      bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4,
-    });
-    geo.translate(0, 0, z);
-    target.add(new THREE.Mesh(geo, solidMaterial));
-    surfaceZ[part] = z + depth + bevel;
+    const cfg = SOLIDS[name];
+    const outline = painted(style.stroke) ? style.strokeWidth : 0;
+    const poly = offsetOutline(shapeOutline(SVGLoader.createShapes(path)[0], cfg.spacing), outline / 2 - (cfg.inset || 0));
+
+    if (name !== 'Head') {
+      const solid = inflate(poly, cfg);
+      target.add(new THREE.Mesh(solid.geometry, solidMaterial));
+      solids[part] = solid;
+      continue;
+    }
+
+    // Head = round ball + two thin ears. Paint lands on whichever surface is in front.
+    const left = splitEar(poly, EARS.left, cfg.spacing);
+    const right = splitEar(left.rest, EARS.right, cfg.spacing);
+    const pieces = [inflate(right.rest, cfg), inflate(left.ear, EARS.config), inflate(right.ear, EARS.config)];
+    for (const p of pieces) target.add(new THREE.Mesh(p.geometry, solidMaterial));
+    solids[part] = {
+      poly,
+      surfaceAt: (x, y) => pieces.map((p) => p.surfaceAt(x, y)).filter(Boolean).sort((a, b) => b.z - a.z)[0] || null,
+    };
     continue;
   }
 
-  // Flat detail layers (eyes, belly, stitches, mouth, head outline) on the part's front face.
-  const z0 = (layerZ[part] ?? surfaceZ[part]) + LAYER_STEP;
+  // Details in SVG paint order: each later layer sits a hair higher (and gets a stronger depth
+  // offset) so it draws on top. Within a group the stack is capped: the stripes never overlap
+  // each other, so they can share one height.
+  const solid = solids[part];
+  const nextLift = () => {
+    stackDepth[name] = Math.min((stackDepth[name] || 0) + 1, 5);
+    return LIFT * stackDepth[name];
+  };
   if (painted(style.fill)) {
-    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(SVGLoader.createShapes(path), 32), flatMaterial(style.fill));
-    mesh.position.z = z0;
-    target.add(mesh);
+    target.add(decal(fillTriangles(path, 1.5), solid, nextLift(), paintMaterial(style.fill)));
   }
   if (painted(style.stroke)) {
+    const material = paintMaterial(style.stroke);
+    const lift = nextLift();
     for (const sub of path.subPaths) {
-      const geo = SVGLoader.pointsToStroke(sub.getPoints(), style);
-      if (!geo) continue;
-      const mesh = new THREE.Mesh(geo, flatMaterial(style.stroke));
-      mesh.position.z = z0 + LAYER_STEP / 2;
-      target.add(mesh);
+      // Strokes drawn along the silhouette only trim the edge (already applied as the solid's inset).
+      if (onSilhouette(sub, solid, style.strokeWidth)) continue;
+      target.add(decal(strokeTriangles(sub, style), solid, lift, material));
     }
   }
-  layerZ[part] = z0 + LAYER_STEP;
 }
 
 function resize() {
@@ -206,8 +549,9 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
-  const fitH = 330 / Math.tan(halfFov);
-  const fitW = 230 / (Math.tan(halfFov) * camera.aspect);
+  // Half-height / half-width to keep in view (the head sticks out toward the camera, so pad generously).
+  const fitH = 340 / Math.tan(halfFov);
+  const fitW = 300 / (Math.tan(halfFov) * camera.aspect);
   const dist = Math.max(fitH, fitW);
   camera.position.set(0, 255, dist);
   controls.minDistance = dist * 0.5;
@@ -236,6 +580,8 @@ renderer.setAnimationLoop(() => {
   parts.tail.pivot.rotation.z = Math.sin(t * 2.6) * 0.18;
 
   controls.update();
+  camera.updateMatrixWorld();
+  lightDirView.value.copy(LIGHT_WORLD).transformDirection(camera.matrixWorldInverse);
   renderer.render(scene, camera);
 });
 </script>
