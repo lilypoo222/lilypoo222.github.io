@@ -1,0 +1,54 @@
+/* ---------- Star cursor (global: include on every page, with assets/js/cursor.js) ---------- */
+/* The cursor is assets/images/star_cursor.svg (127 × 122) shown at ¼ size (~32px); the click
+   point is the tip of the star's upper-left point.
+   - Normally: a white star blended with "difference", so it's black over light areas, white over
+     dark ones, and inverts any other colour — always visible.
+   - Over anything clickable: pink (--cursor-hover-color), or green
+     (--cursor-hover-contrast-color) when the thing under it is that same pink.
+   Without the script (or on touch screens), the plain star below is used as a normal cursor. */
+:root {
+  --cursor-hover-color: #ef5fa0;
+  --cursor-hover-contrast-color: #10a05f;
+}
+
+html {
+  cursor: url("../images/star_cursor.svg") 5 0, auto;
+  cursor: image-set(url("../images/star_cursor.svg") 4x) 5 0, auto;
+}
+
+/* Keep the star over links and buttons too (instead of the hand). */
+a,
+button {
+  cursor: inherit;
+}
+
+.star-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  width: 31.75px;
+  height: 30.5px;
+  background: #fff;
+  -webkit-mask: url("../images/star_cursor.svg") center / contain no-repeat;
+  mask: url("../images/star_cursor.svg") center / contain no-repeat;
+  mix-blend-mode: difference;
+  pointer-events: none;
+  opacity: 0;
+  transition: background-color 0.15s ease;
+}
+
+.star-cursor.is-over-clickable {
+  mix-blend-mode: normal;
+  background: var(--cursor-hover-color);
+}
+
+.star-cursor.is-over-clickable.is-over-hover-color {
+  background: var(--cursor-hover-contrast-color);
+}
+
+/* While the star is active, hide the system cursor everywhere (even where a page sets its own). */
+html.has-star-cursor,
+html.has-star-cursor * {
+  cursor: none !important;
+}

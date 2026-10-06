@@ -94,16 +94,6 @@
 
 html {
   overflow-x: clip;
-  /* Custom cursor: assets/images/star_cursor.svg (127 × 122) shown at ¼ size (~32px). The click
-     point is the tip of the star's upper-left point. Falls back to the normal cursor. */
-  cursor: url("../images/star_cursor.svg") 5 0, auto;
-  cursor: image-set(url("../images/star_cursor.svg") 4x) 5 0, auto;
-}
-
-/* Keep the star over links and buttons too (instead of the hand). */
-a,
-button {
-  cursor: inherit;
 }
 
 body {
