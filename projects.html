@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projects</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/cursor.css">
+  <script src="assets/js/cursor.js" defer></script>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/case-study.css">
+</head>
+<body>
+  <!-- Projects: placeholder page (not designed yet) with a button into each case study.
+       Same frame as the homepage (.home: fills the window, min 860px tall) so the notepad nav
+       sits in the same place, anchored to the bottom. Content starts at column 4, clear of the nav. -->
+  <div class="canvas">
+  <div class="home">
+
+    <main class="container grid" style="padding-top: 48px">
+      <div style="grid-column: 4 / -1">
+        <h1 class="cs-hero__title">Projects</h1>
+        <p class="cs-top" style="margin-top: 48px; justify-content: flex-start">
+          <a class="cs-top__back" href="projects/california-digital-id.html">California Digital Driver’s License →</a>
+        </p>
+      </div>
+    </main>
+
+    <!-- Notepad nav, copied from index.html (Figma 2161:1198); "projects" is the current page. -->
+    <nav class="notepad-nav" aria-label="Main">
+      <img class="notepad-nav__paper" src="assets/images/notepad-paper.svg" width="317" height="533" alt="">
+      <ul class="notepad-nav__links">
+        <li><a href="index.html">home</a></li>
+        <li><a href="projects.html" aria-current="page">projects</a></li>
+        <li><a href="#">about me</a></li>
+        <li><a href="#">contact</a></li>
+      </ul>
+      <a class="notepad-nav__cat" href="#">meet the cat</a>
+    </nav>
+
+  </div>
+  </div>
+
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>

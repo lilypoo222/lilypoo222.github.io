@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>California Digital Driver's License — Case Study</title>
+  <link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/cursor.css">
+  <script src="../assets/js/cursor.js" defer></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../assets/css/case-study.css">
+</head>
+<body>
+  <!-- Case study: California Digital Driver's License (CalifornID), Elements III.
+       Content and order follow the slide deck in Figma: EIII Proj. 1 > "Case Study" page
+       (file hGjw1v2fQp2NiVypEn2jdF), one block per slide.
+       Final screens are blank iPhone 16 mockups: to swap one in, put an <img> inside its
+       .iphone__screen (the label hides itself). -->
+  <div class="canvas">
+  <div class="cs">
+
+    <header class="cs-top">
+      <!-- Back to the projects page. -->
+      <a class="cs-top__back" href="../projects.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        projects
+      </a>
+      <nav aria-label="Breadcrumb">
+        <ol class="cs-top__crumbs">
+          <li><a href="../index.html">home</a></li>
+          <li><a href="../projects.html">projects</a></li>
+          <li><span aria-current="page">california digital ID</span></li>
+        </ol>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Cover (slide 00) -->
+      <section class="cs-hero" aria-labelledby="cs-title">
+        <div class="cs-hero__text">
+          <p class="cs-eyebrow">Case study · Mobile ID app</p>
+          <h1 class="cs-hero__title" id="cs-title">California Digital Driver’s License</h1>
+          <ul class="cs-hero__tags">
+            <li class="cs-tag">UI / UX design</li>
+            <li class="cs-tag">iOS app</li>
+            <li class="cs-tag">Animated prototype</li>
+          </ul>
+        </div>
+
+        <aside class="cs-hero__card journal-card" aria-label="Project details">
+          <dl class="cs-meta">
+            <div><dt>Designer</dt><dd>Lily Horvatits</dd></div>
+            <div><dt>Class</dt><dd>Elements III</dd></div>
+            <div><dt>Professor</dt><dd>Hye-Jin Nae</dd></div>
+            <div><dt>Term</dt><dd>Spring 2026</dd></div>
+            <div><dt>Platform</dt><dd>iOS, iPhone 16 &amp; 17 Pro</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <div class="cs-showcase">
+        <img class="cs-showcase__forest cs-showcase__forest--left" src="../assets/images/projects/mobile-id/forest.png" width="611" height="497" alt="">
+        <img class="cs-showcase__forest" src="../assets/images/projects/mobile-id/forest.png" width="611" height="497" alt="">
+        <div class="cs-showcase__phones">
+          <div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Splash Screen</span></div></div></div>
+          <div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Full Info V2</span></div></div></div>
+          <div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Age/Scan V2</span></div></div></div>
+        </div>
+      </div>
+
+      <!-- Table of contents (slide 01) -->
+      <nav class="cs-contents" aria-labelledby="cs-contents-title">
+        <h2 id="cs-contents-title">Table of contents</h2>
+        <ol class="cs-contents__cols">
+          <li class="cs-contents__chapter">
+            <a href="#project-intro"><span>01</span>Project Intro</a>
+            <ul>
+              <li><a href="#overview">Overview</a></li>
+              <li><a href="#problems">Problems &amp; Opportunities</a></li>
+              <li><a href="#goal">Project Goal</a></li>
+            </ul>
+          </li>
+          <li class="cs-contents__chapter">
+            <a href="#research"><span>02</span>Research &amp; Plan</a>
+            <ul>
+              <li><a href="#competitive-analysis">Competitive Analysis</a></li>
+              <li><a href="#brainstorming">Brainstorming</a></li>
+              <li><a href="#sketches">Sketches</a></li>
+            </ul>
+          </li>
+          <li class="cs-contents__chapter">
+            <a href="#development"><span>03</span>Development</a>
+            <ul>
+              <li><a href="#grid">Grid &amp; Layout</a></li>
+              <li><a href="#inspiration">Inspiration Boards</a></li>
+              <li><a href="#wireframes-v1">Wireframes V1</a></li>
+              <li><a href="#iteration-v1">Iteration V1</a></li>
+              <li><a href="#wireframes-v2">Wireframes V2</a></li>
+              <li><a href="#iteration-v2">Iteration V2</a></li>
+            </ul>
+          </li>
+          <li class="cs-contents__chapter">
+            <a href="#final-design"><span>04</span>Final Design</a>
+            <ul>
+              <li><a href="#style-guide">Style Guide</a></li>
+              <li><a href="#static-screens">Static Screens</a></li>
+              <li><a href="#navigation">Navigation &amp; Features</a></li>
+              <li><a href="#prototype">Animated Prototype</a></li>
+              <li><a href="#reflection">Reflection/Takeaways</a></li>
+            </ul>
+          </li>
+        </ol>
+      </nav>
+
+      <div class="cs-body">
+        <!-- Sticky chapter rail; case-study.js marks the chapter in view. -->
+        <nav class="cs-rail" aria-label="Chapters">
+          <ol>
+            <li><a href="#project-intro"><span>01</span>Project Intro</a></li>
+            <li><a href="#research"><span>02</span>Research &amp; Plan</a></li>
+            <li><a href="#development"><span>03</span>Development</a></li>
+            <li><a href="#final-design"><span>04</span>Final Design</a></li>
+          </ol>
+        </nav>
+
+        <div class="cs-story">
+
+          <!-- ========== 01 Project Intro (slides 02–05) ========== -->
+          <section class="cs-chapter" id="project-intro" aria-labelledby="ch-intro">
+            <header class="cs-chapter__head">
+              <div>
+                <span class="cs-chapter__num">01</span>
+                <h2 class="cs-chapter__title" id="ch-intro">Project intro</h2>
+              </div>
+              <img class="cs-chapter__art" src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="">
+            </header>
+
+            <div class="cs-block cs-cols" id="overview">
+              <h3 class="cs-block__label">Overview</h3>
+              <div class="cs-text cs-text--wide">
+                <p><strong>Digital IDs</strong> are a helpful solution for today’s society that is heavily dependent on one thing: their cellphone. Life moves fast and it is very easy to forget our physical IDs, especially if we already have our credit cards on our phones.</p>
+                <p>Some states, including <strong>California</strong>, have already began their own unique iterations for a digital ID application. It will take time and be difficult to <strong>switch from physical to digital</strong>, but let’s break down why it works.</p>
+              </div>
+            </div>
+
+            <div class="cs-block cs-cols" id="problems">
+              <h3 class="cs-block__label">Problems &amp; Opportunities</h3>
+              <div class="cs-pages">
+                <div class="journal-card">
+                  <h3>Problems</h3>
+                  <ul>
+                    <li>Poor hierarchy</li>
+                    <li>Crowded information</li>
+                    <li>No longer most efficient solution</li>
+                  </ul>
+                </div>
+                <div class="journal-card">
+                  <h3>Opportunities</h3>
+                  <ul>
+                    <li>Dynamic &amp; interactive</li>
+                    <li>Creative UI &amp; illustrative designs</li>
+                    <li>Custom &amp; personal</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="cs-block cs-cols" id="goal">
+              <h3 class="cs-block__label">Project Goal</h3>
+              <blockquote class="cs-goal">
+                <p>Create a beautiful design that <strong>gently guides the user</strong> with smooth elements and transitions.</p>
+                <p>Offer another level of <strong>customization, security</strong> and <strong>privacy</strong> so the user feels comfortable having all their information in one place.</p>
+              </blockquote>
+            </div>
+          </section>
+
+          <!-- ========== 02 Research & Plan (slides 06–11) ========== -->
+          <section class="cs-chapter" id="research" aria-labelledby="ch-research">
+            <header class="cs-chapter__head">
+              <div>
+                <span class="cs-chapter__num">02</span>
+                <h2 class="cs-chapter__title" id="ch-research">Research &amp;<br>plan</h2>
+              </div>
+              <img class="cs-chapter__art" src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="">
+            </header>
+
+            <div class="cs-block cs-cols" id="competitive-analysis">
+              <h3 class="cs-block__label"><small>Competitive Analysis</small>The physical ID</h3>
+              <div class="cs-text">
+                <div class="cs-proscons">
+                  <div>
+                    <h4>Strengths</h4>
+                    <p>the most widely accepted solution<br>has great security and verifiability (symbols, iconography, colors, barcodes).</p>
+                  </div>
+                  <div>
+                    <h4>Weaknesses</h4>
+                    <p>easy to lose and extremely hard to read due to clutter<br>lacks hierarchy, especially for those with poor vision.</p>
+                  </div>
+                </div>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/physical-id.png" width="543" height="453" alt="A sample California driver's license, front and back.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols">
+              <h3 class="cs-block__label"><small>Competitive Analysis</small>Digital IDs</h3>
+              <div class="cs-text">
+                <p>State official and <strong>Apple/Samsung/Google digital IDs</strong> are already beginning to enter the arena. They are a great first step to transferring to digital identification methods. Both groups offer <strong>trustworthy, secure and easily verifiable</strong> solutions, while wallet apps like Apple and Samsung offer more <strong>aesthetically pleasing</strong> apps, with <strong>unique features</strong> like tap.</p>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/competitors.png" width="534" height="534" alt="Existing digital IDs: state apps and Apple, Samsung and Google wallet IDs.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="brainstorming">
+              <h3 class="cs-block__label">Brainstorming</h3>
+              <div class="cs-text cs-text--wide">
+                <p>I chose the state of <strong>California</strong> because of the variety of <strong>visual opportunities</strong> that the state’s culture can lend itself to. There are several unique <strong>state symbols</strong> or experiences that are easily recognizable as California. The <strong>bear</strong> on the flag and as the state’s animal, the state flower: <strong>poppy</strong>, and other concepts like the state colors: <strong>blue and orange.</strong></p>
+              </div>
+            </div>
+
+            <div class="cs-block cs-cols" id="sketches">
+              <h3 class="cs-block__label">Sketches</h3>
+              <div class="cs-text">
+                <p>I wanted to explore different ways of laying out the information. At first, my ideas were more experimental. The idea was to scroll rather than having all the information ready at the start.</p>
+                <p>The splash screen was the most fun part to brainstorm with in terms of animation possibilities!</p>
+              </div>
+              <div class="cs-sketches">
+                <figure class="taped"><img src="../assets/images/projects/mobile-id/sketch-layouts.png" width="443" height="560" alt="Pencil sketches of two scrolling ID layouts."></figure>
+                <figure class="taped"><img src="../assets/images/projects/mobile-id/sketch-splash-1.png" width="261" height="513" alt="Splash screen sketch with a hand-lettered logo."></figure>
+                <figure class="taped"><img src="../assets/images/projects/mobile-id/sketch-splash-2.png" width="257" height="512" alt="Splash screen sketch with redwood trees above the logo."></figure>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========== 03 Development (slides 12–19) ========== -->
+          <section class="cs-chapter" id="development" aria-labelledby="ch-dev">
+            <header class="cs-chapter__head">
+              <div>
+                <span class="cs-chapter__num">03</span>
+                <h2 class="cs-chapter__title" id="ch-dev">Development</h2>
+              </div>
+              <img class="cs-chapter__art" src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="">
+            </header>
+
+            <div class="cs-block cs-cols" id="grid">
+              <h3 class="cs-block__label">Grid &amp; Layout</h3>
+              <div class="cs-text">
+                <ul>
+                  <li><strong>4px grid</strong></li>
+                  <li>IOS iPhone 16 &amp; 17 Pro, <strong>402 x 874px</strong></li>
+                  <li><strong>4 columns,</strong> 16px margin &amp; gutter</li>
+                  <li>Top safe area: <strong>36px</strong></li>
+                  <li>Bottom safe area: <strong>34px</strong></li>
+                </ul>
+              </div>
+              <figure class="cs-media" style="max-width: 280px; justify-self: center;">
+                <img src="../assets/images/projects/mobile-id/grid-layout.png" width="402" height="874" alt="The 402 × 874 screen with four columns and the top and bottom safe areas.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="inspiration">
+              <h3 class="cs-block__label"><small>Inspiration Boards</small>Coastal Crush</h3>
+              <div class="cs-text">
+                <p>This design approach calls to the fresh, coastal, and beachy appeal that California can bring. Playing off the state’s colors of blue and gold, this palette is fun and inviting. This design will make you want to go on vacation, reminding you that you live in the “golden state”. Referencing 70-80s retro style, this design is nostalgic yet something new.</p>
+                <h4>Keywords:</h4>
+                <ul class="cs-chips"><li class="cs-tag">warm</li><li class="cs-tag">dreamy</li><li class="cs-tag">alive</li></ul>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/inspo-coastal-crush.png" width="720" height="405" alt="Coastal Crush mood board: beaches, blue and gold, retro type.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols">
+              <h3 class="cs-block__label"><small>Inspiration Boards</small>Naturium</h3>
+              <div class="cs-text">
+                <p>California has its bustling cities full of music, money, movies... but it also has its adventurous side. This design will play into California’s natural appeal, highlighting the beautiful Redwood trees, paired with modern, fresh, almost illustrative elements, to create a delicate design. Rounded puzzle-like elements will keep users engaged yet informed.</p>
+                <h4>Keywords:</h4>
+                <ul class="cs-chips"><li class="cs-tag">friendly</li><li class="cs-tag">gentle</li><li class="cs-tag">peaceful</li><li class="cs-tag">lush</li></ul>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/inspo-naturium.png" width="720" height="405" alt="Naturium mood board: redwoods, soft greens and delicate illustrations.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="wireframes-v1">
+              <h3 class="cs-block__label">Wireframes V1</h3>
+              <div class="cs-text">
+                <ol class="cs-numbered">
+                  <li>Portrait of user</li>
+                  <li>Age &amp; name display</li>
+                  <li>Side bar navigation w/ real ID and organ donor symbols</li>
+                  <li>Barcode scan</li>
+                  <li>Full information display</li>
+                </ol>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/wireframes-v1.png" width="728" height="732" alt="Two greyscale wireframes, numbered 1 to 5.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="iteration-v1">
+              <h3 class="cs-block__label">Iteration V1</h3>
+              <div class="cs-text">
+                <p>I felt the <strong>colors</strong> really brought this design to life. The imagery was just the way I wanted it, and I loved the <strong>playful energy</strong> it had. Still, something <strong>felt too elementary</strong> in this design and the <strong>typography was insufficient</strong> so I moved onto my next design direction.</p>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/iteration-v1.png" width="728" height="741" alt="Iteration V1: a collapsed and an expanded ID in cream, orange and blue with poppy imagery.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="wireframes-v2">
+              <h3 class="cs-block__label">Wireframes V2</h3>
+              <div class="cs-text">
+                <ol class="cs-numbered">
+                  <li>Portrait of user</li>
+                  <li>Full information display</li>
+                  <li>Switch pages w/ buttons</li>
+                  <li>Real ID verification</li>
+                  <li>Age display</li>
+                  <li>Barcode scan</li>
+                </ol>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/wireframes-v2.png" width="728" height="741" alt="Two greyscale wireframes, numbered 1 to 6.">
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="iteration-v2">
+              <h3 class="cs-block__label">Iteration V2</h3>
+              <div class="cs-text">
+                <p>For this design direction, I loved the simplicity of the UI and the colors felt <strong>calming</strong> just the way I intended. The typography still did not have good <strong>hierarchical value</strong>. Additionally, the two buttons at the bottom were not enough of a navigation system and the design <strong>felt unrealistic</strong> as an app.</p>
+              </div>
+              <figure class="cs-media">
+                <img src="../assets/images/projects/mobile-id/iteration-v2.png" width="728" height="741" alt="Iteration V2: green and cream screens with redwood illustrations and a full info view.">
+              </figure>
+            </div>
+          </section>
+
+          <!-- ========== 04 Final Design (slides 20–27) ========== -->
+          <section class="cs-chapter" id="final-design" aria-labelledby="ch-final">
+            <header class="cs-chapter__head">
+              <div>
+                <span class="cs-chapter__num">04</span>
+                <h2 class="cs-chapter__title" id="ch-final">Final design</h2>
+              </div>
+              <img class="cs-chapter__art" src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="">
+            </header>
+
+            <div class="cs-block cs-cols" id="style-guide">
+              <h3 class="cs-block__label">Style Guide</h3>
+              <dl class="cs-type-specimens">
+                <div><dt>Type</dt><dd><strong>TITLE -</strong> Novantique Serif Bold, 36/32pt</dd></div>
+                <div><dd><strong>SECTION TITLE -</strong> Proxima Nova Regular, 18pt</dd></div>
+                <div><dd><strong>INFORMATION -</strong> Proxima Nova Bold, 20pt</dd></div>
+                <div><dt>Splash</dt><dd>Adventures Unlimited Script, 64pt</dd></div>
+              </dl>
+              <div class="cs-swatches">
+                <h4>Color/Assets</h4>
+                <ul>
+                  <li><span style="background: #52774E"></span><code>#52774E</code></li>
+                  <li><span style="background: #FFF5B2"></span><code>#FFF5B2</code></li>
+                  <li><span style="background: #FFFFF5"></span><code>#FFFFF5</code></li>
+                  <li><span style="background: #212120"></span><code>#212120</code></li>
+                </ul>
+                <div class="cs-swatches__art">
+                  <img src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="Line-drawn poppy field illustration.">
+                  <img src="../assets/images/projects/mobile-id/forest.png" width="611" height="497" alt="Redwood trees and a bear silhouette.">
+                </div>
+              </div>
+            </div>
+
+            <div class="cs-block cs-cols" id="static-screens">
+              <h3 class="cs-block__label">Static Screens</h3>
+              <ul class="cs-phones">
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Splash Screen</span></div></div></div><p class="cs-caption">Splash Screen</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Full Info V1</span></div></div></div><p class="cs-caption">Full Info V1</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Full Info V2</span></div></div></div><p class="cs-caption">Full Info V2</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Age/Scan V1</span></div></div></div><p class="cs-caption">Age/Scan V1</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Age/Scan V2</span></div></div></div><p class="cs-caption">Age/Scan V2</p></li>
+              </ul>
+            </div>
+
+            <div class="cs-block cs-cols" id="navigation">
+              <h3 class="cs-block__label">Navigation &amp; Features</h3>
+              <div class="cs-text">
+                <ul>
+                  <li>Collapsed/expanded views</li>
+                  <li>Flower for app verification</li>
+                  <li>Real ID and organ donor icons</li>
+                  <li>Hamburger menu</li>
+                </ul>
+              </div>
+              <ul class="cs-phones cs-phones--pair">
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Full Info View V1</span></div></div></div><p class="cs-caption">Full Info View V1</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Full Info View V2</span></div></div></div><p class="cs-caption">Full Info View V2</p></li>
+              </ul>
+            </div>
+
+            <div class="cs-block cs-cols">
+              <div class="cs-text">
+                <ul>
+                  <li>Confirmation to scan</li>
+                  <li>Ideally add another level of security</li>
+                  <li>Barcode</li>
+                </ul>
+              </div>
+              <ul class="cs-phones cs-phones--pair">
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Age/Scan View V1</span></div></div></div><p class="cs-caption">Age/Scan View V1</p></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Age/Scan View V2</span></div></div></div><p class="cs-caption">Age/Scan View V2</p></li>
+              </ul>
+            </div>
+
+            <div class="cs-block cs-cols">
+              <div class="cs-text">
+                <ul>
+                  <li>Rounded corners make a <strong>gentle</strong> design</li>
+                  <li><strong>Calming</strong> colors</li>
+                  <li>Illustrations and delicate lines are <strong>friendly</strong></li>
+                  <li>Serif / sans serif combo is <strong>elegant</strong></li>
+                  <li>Connections to nature are <strong>peaceful</strong> and feel <strong>adventurous</strong></li>
+                </ul>
+              </div>
+              <!-- Figma shows two long scrolling screens here (Frame 100 / Frame 101). -->
+              <ul class="cs-phones cs-phones--pair">
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Screen flow 1</span></div></div></div></li>
+                <li><div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label">Screen flow 2</span></div></div></div></li>
+              </ul>
+            </div>
+
+            <div class="cs-block cs-cols" id="prototype">
+              <h3 class="cs-block__label">Animated Prototype</h3>
+              <div class="cs-text">
+                <!-- Vimeo link to come: link this text, or put the video inside the phone below. -->
+                <p><a href="#">Vimeo Link</a></p>
+                <p><em>*Shows interaction of Full Info and Age View</em></p>
+              </div>
+              <figure class="cs-prototype">
+                <div class="iphone"><div class="iphone__body"><div class="iphone__screen"><span class="iphone__label" style="margin-top: 60%">Prototype video</span></div></div></div>
+              </figure>
+            </div>
+
+            <div class="cs-block cs-cols" id="reflection">
+              <h3 class="cs-block__label">Reflection/Takeaways</h3>
+              <div class="cs-text">
+                <p>I learned that it is easy for things to look the same, and therefore become <strong>redundant</strong>. It’s important to <strong>take visual risks</strong>; having different design dynamics doesn’t mean you have to compromise the style’s cohesion. If I were to redo this project, I would’ve <strong>explored more</strong> unique ways to <strong>display information</strong>.</p>
+              </div>
+              <div class="cs-next journal-card">
+                <h3>Next steps:</h3>
+                <p style="margin: 0">add in the <strong>“Face ID” feature</strong> and develop the <strong>“Medical” page</strong>. Opportunities to add in a <strong>wallet feature.</strong></p>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      <!-- End (slide 28) -->
+      <section class="cs-end" aria-label="End">
+        <img class="cs-end__art" src="../assets/images/projects/mobile-id/flower-field.png" width="636" height="424" alt="">
+        <p class="cs-end__title">thank you !</p>
+        <a class="cs-top__back" href="../projects.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+          back to projects
+        </a>
+      </section>
+    </main>
+
+  </div>
+  </div>
+
+  <script src="../assets/js/case-study.js" defer></script>
+</body>
+</html>
