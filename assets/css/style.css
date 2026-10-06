@@ -73,7 +73,7 @@
 :root {
   /* Layout grid (Figma: 12 columns, stretch, auto width, 60px margin, 20px gutter on a 1440 canvas) */
   --canvas-width: 1440px;
-  --canvas-min-height: 800px;
+  --canvas-min-height: 860px;
   --grid-columns: 12;
   --grid-margin: 60px;
   --grid-gutter: 20px;
@@ -167,8 +167,8 @@ img {
    Height: the frame fills the browser window (100dvh) instead of a fixed 1024. The hero is
    pinned to the top; the hill, grass, cat and cloud keep their Figma distances from the bottom
    (written as 100% − (1024 − y)), so they always sit at the bottom of the window. Below
-   --canvas-min-height the frame stops shrinking (and scrolls) so the cloud never runs into
-   the hero text. */
+   --canvas-min-height (860) the frame stops shrinking (and scrolls) so the notepad nav and the
+   cloud never run into the hero text. */
 .home {
   position: relative;
   width: 100%;
@@ -241,10 +241,119 @@ img {
   pointer-events: none;
 }
 
-/* Navigation (Figma "nav bar" + "meet the cat"): Instrument Sans Bold 18px, 49px up from the
-   bottom of the frame (y 975). The page links sit in a row from column 1 with 64px gaps;
-   "meet the cat" starts on column 8. */
-.site-nav {
+/* New nav (Figma "new nav" 2161:1198): the links written on a notepad page. The page is 312 ×
+   527.5 at (60, 421.39) on the 1024 frame; like the cat group, it keeps its distance from the
+   bottom of the frame (top = 100% − 602.61px), so it stays put as the window height changes.
+   Instrument Sans Bold 32px, at Figma's x positions: the four page links centred in a 146px column
+   at x 145 with 24px gaps (first at y 518), "meet the cat" at (120, 828). The current page's link
+   is blue. */
+:root {
+  --color-nav-current: #2a3ebe;
+}
+
+.notepad-nav {
+  position: absolute;
+  left: var(--grid-margin);
+  top: calc(100% - 602.61px);
+  width: 312px;
+  height: 527.525px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 32px;
+  line-height: normal;
+}
+
+/* The SVG is 2.5px bigger than the page on every side (its outline stroke). */
+.notepad-nav__paper {
+  position: absolute;
+  left: -2.5px;
+  top: -2.5px;
+  width: 316.999px;
+  max-width: none;
+  height: 532.525px;
+  pointer-events: none;
+}
+
+.notepad-nav a {
+  color: #000;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.notepad-nav a[aria-current="page"] {
+  color: var(--color-nav-current);
+}
+
+.notepad-nav__links a {
+  position: relative;
+  display: inline-block;
+}
+
+/* Hover/focus: a hand-drawn circle around the link, in the current-page blue (drawn by
+   main.js — a new, slightly different loop each time, like circling it with a pen). */
+.nav-circle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.nav-circle path {
+  fill: none;
+  stroke: var(--color-nav-current);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.nav-circle.is-drawn path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.45s cubic-bezier(0.5, 0.05, 0.3, 1);
+}
+
+.nav-circle.is-erasing {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-circle.is-drawn path {
+    transition: none;
+  }
+}
+
+.notepad-nav__links {
+  position: absolute;
+  left: 85px;
+  width: 146px;
+  top: 96.61px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notepad-nav__cat {
+  position: absolute;
+  left: 60px;
+  top: 406.61px;
+}
+
+/* Static nav (Figma "nav bar" + "meet the cat"): the previous nav, hidden for now (the [hidden]
+   attribute in index.html). Instrument Sans Bold 18px, 49px up from the bottom of the frame
+   (y 975). The page links sit in a row from column 1 with 64px gaps; "meet the cat" starts on
+   column 8. */
+.static-nav[hidden] {
+  display: none;
+}
+
+.static-nav {
   position: sticky;
   inset-inline: 0;
   top: calc(100% - 49px);
@@ -255,13 +364,13 @@ img {
   line-height: normal;
 }
 
-.site-nav a {
+.static-nav a {
   color: #000;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.site-nav__links {
+.static-nav__links {
   grid-column: 1 / 8;
   display: flex;
   gap: 64px;
@@ -270,7 +379,7 @@ img {
   list-style: none;
 }
 
-.site-nav__cat {
+.static-nav__cat {
   grid-column: 8;
 }
 

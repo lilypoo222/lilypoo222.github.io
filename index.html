@@ -41,16 +41,30 @@
       <img class="home__cat-art" src="assets/images/2D-cat-idle.svg" width="227" height="317" alt="Black cat character">
     </div>
 
-    <!-- nav bar + "meet the cat": the site's navigation, along the bottom of the frame.
-         Pages don't exist yet, so those links are placeholders. -->
-    <nav class="site-nav container grid" aria-label="Main">
-      <ul class="site-nav__links">
+    <!-- new nav (Figma 2161:1198): the site's navigation, written on a notepad page at (60, 421).
+         The current page's link is blue (aria-current="page"). Pages don't exist yet, so the other
+         links are placeholders. -->
+    <nav class="notepad-nav" aria-label="Main">
+      <img class="notepad-nav__paper" src="assets/images/notepad-paper.svg" width="317" height="533" alt="">
+      <ul class="notepad-nav__links">
         <li><a href="index.html" aria-current="page">home</a></li>
         <li><a href="#">projects</a></li>
         <li><a href="#">about me</a></li>
         <li><a href="#">contact</a></li>
       </ul>
-      <a class="site-nav__cat" href="#">meet the cat</a>
+      <a class="notepad-nav__cat" href="#">meet the cat</a>
+    </nav>
+
+    <!-- static nav: the previous nav bar along the bottom of the frame. Hidden for now (kept in
+         case it comes back). -->
+    <nav class="static-nav container grid" aria-label="Main" hidden>
+      <ul class="static-nav__links">
+        <li><a href="index.html" aria-current="page">home</a></li>
+        <li><a href="#">projects</a></li>
+        <li><a href="#">about me</a></li>
+        <li><a href="#">contact</a></li>
+      </ul>
+      <a class="static-nav__cat" href="#">meet the cat</a>
     </nav>
 
     <!-- iwanttoplay: thought cloud -->
