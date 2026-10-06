@@ -117,6 +117,7 @@ async function start() {
     for (const word of hero.querySelectorAll('.hero-text__word')) {
       const style = getComputedStyle(word);
       ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      ctx.letterSpacing = style.letterSpacing === 'normal' ? '0px' : style.letterSpacing;
       // An inline box's height is the font's ascent + descent, so the baseline is top + ascent.
       const r = word.getBoundingClientRect();
       const ascent = ctx.measureText(word.textContent).fontBoundingBoxAscent;

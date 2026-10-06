@@ -151,6 +151,9 @@ img {
   font-weight: 400;
   font-size: var(--typography-size-xxl);
   line-height: 0.743;
+  /* A hair of spacing (0.12px at 128px) so the "g" of "celebrating" lands exactly on the right
+     edge of column 9. */
+  letter-spacing: 0.000957em;
   color: #000;
 }
 
