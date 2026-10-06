@@ -179,6 +179,39 @@ img {
   pointer-events: none;
 }
 
+/* Navigation (Figma "nav bar" + "meet the cat"): Instrument Sans Bold 18px, 49px up from the
+   bottom of the frame (y 975). The page links sit in a row from column 1 with 64px gaps;
+   "meet the cat" starts on column 8. */
+.site-nav {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% - 49px);
+  z-index: 1;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: normal;
+}
+
+.site-nav a {
+  color: #000;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav__links {
+  grid-column: 1 / 8;
+  display: flex;
+  gap: 64px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-nav__cat {
+  grid-column: 8;
+}
+
 /* cat_vector: the 2D cat (frame 2105:473) and its shadow, at x (83.33% − 43px), y 640.37. */
 .home__cat {
   position: absolute;
