@@ -1,9 +1,11 @@
-// Hero text hover warp.
+// Hero text hover warp + reveal.
 // The hero text is drawn into a WebGL canvas. A small "jelly" simulation runs underneath it:
 // moving the cursor across the letters pushes them along with it, they spring back with a soft
-// wobble, and a gentle lens swells the letters under the cursor. The real text stays in the page
-// (invisible while the canvas shows it), and is simply shown as-is without WebGL or with
-// reduced motion.
+// wobble, and a gentle lens swells the letters under the cursor.
+// Reveal: words with a data-reveal attribute have a second version (e.g. "celebrating" →
+// "revealing"). The cursor paints a soft brush that uncovers that version as you hover; it fades
+// back once you move away. The real text stays in the page (invisible while the canvas shows it),
+// and is simply shown as-is without WebGL or with reduced motion.
 import * as THREE from 'three';
 
 const hero = document.querySelector('.hero-text');
@@ -17,10 +19,14 @@ const SIM_WIDTH = 320;       // simulation resolution (height follows the canvas
 const STIFFNESS = 90;        // how hard the letters spring back
 const DAMPING = 6.5;         // how quickly the wobble settles
 const PUSH = 1.6;            // how much cursor motion drags the letters
-const RADIUS = 0.22;         // cursor influence, as a fraction of the canvas height
+const RADIUS = 0.15;         // cursor influence, as a fraction of the canvas height
 const LENS = 0.18;           // magnifying swell under the cursor (0 = none)
 const MAX_SPEED = 2.5;       // cap on cursor speed (canvas heights per second)
 const MAX_STRETCH = 0.07;    // furthest a point of a letter can be dragged (canvas heights)
+// Reveal brush: a tall oval that covers a full line of text, so moving across a word wipes it over
+// in clean vertical slices. Width and height as fractions of the canvas height.
+const REVEAL_BRUSH = [0.07, 0.2];
+const REVEAL_FADE = 1.6;     // seconds for a revealed patch to fade most of the way back
 
 const SIM_VERTEX = `
   varying vec2 vUv;
@@ -66,9 +72,29 @@ const SIM_FRAGMENT = `
   }
 `;
 
+// Reveal mask (red channel, 0 → 1): the brush paints it where the cursor is; it fades over time.
+const MASK_FRAGMENT = `
+  uniform sampler2D uPrev;
+  uniform vec2 uMouse;
+  uniform float uAspect;
+  uniform vec2 uBrush;
+  uniform float uDt;
+  uniform float uFade;
+  uniform float uActive;
+  varying vec2 vUv;
+  void main() {
+    float m = texture2D(uPrev, vUv).r * exp(-uDt / uFade);
+    vec2 p = (vUv - uMouse) * vec2(uAspect, 1.0) / uBrush;
+    float brush = exp(-dot(p, p)) * uActive;
+    gl_FragColor = vec4(max(m, brush), 0.0, 0.0, 1.0);
+  }
+`;
+
 const DISPLAY_FRAGMENT = `
   uniform sampler2D uText;
+  uniform sampler2D uTextReveal;
   uniform sampler2D uSim;
+  uniform sampler2D uMask;
   uniform vec2 uMouse;
   uniform float uHover;
   uniform float uAspect;
@@ -81,7 +107,10 @@ const DISPLAY_FRAGMENT = `
     vec2 p = (uv - uMouse) * vec2(uAspect, 1.0);
     float r = length(p) / (uRadius * 1.4);
     uv = uMouse + (uv - uMouse) * (1.0 - uLens * uHover * exp(-r * r));
-    gl_FragColor = texture2D(uText, uv);
+    // The revealed words follow the warp too (the mask is read at the warped position).
+    // A crisp edge: each spot shows one word or the other, never both see-through.
+    float reveal = smoothstep(0.46, 0.54, texture2D(uMask, uv).r);
+    gl_FragColor = mix(texture2D(uText, uv), texture2D(uTextReveal, uv), reveal);
     #include <colorspace_fragment>
   }
 `;
@@ -96,22 +125,27 @@ async function start() {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quad = new THREE.PlaneGeometry(2, 2);
 
-  // ---------- text texture ----------
-  const textCanvas = document.createElement('canvas');
-  const textTexture = new THREE.CanvasTexture(textCanvas);
-  textTexture.colorSpace = THREE.SRGBColorSpace;
-  textTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  // ---------- text textures: as written, and with the data-reveal words swapped in ----------
+  function textLayer() {
+    const layerCanvas = document.createElement('canvas');
+    const texture = new THREE.CanvasTexture(layerCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return { canvas: layerCanvas, texture };
+  }
+  const baseLayer = textLayer();
+  const revealLayer = textLayer();
 
-  function drawText(cw, ch, dpr) {
+  function drawText(layer, cw, ch, dpr, revealed) {
     // Draw each word exactly where the (invisible) page text sits, in its own font style.
     const c = canvas.getBoundingClientRect();
     const w = Math.round(cw * dpr), h = Math.round(ch * dpr);
     // A texture can't change size in place: free the old one so the GPU copy is re-created.
-    if (textCanvas.width !== w || textCanvas.height !== h) textTexture.dispose();
-    textCanvas.width = w;
-    textCanvas.height = h;
-    const ctx = textCanvas.getContext('2d');
-    ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    if (layer.canvas.width !== w || layer.canvas.height !== h) layer.texture.dispose();
+    layer.canvas.width = w;
+    layer.canvas.height = h;
+    const ctx = layer.canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
     ctx.scale(dpr, dpr);
     ctx.fillStyle = '#000';
     for (const word of hero.querySelectorAll('.hero-text__word')) {
@@ -120,16 +154,19 @@ async function start() {
       ctx.letterSpacing = style.letterSpacing === 'normal' ? '0px' : style.letterSpacing;
       // An inline box's height is the font's ascent + descent, so the baseline is top + ascent.
       const r = word.getBoundingClientRect();
-      const ascent = ctx.measureText(word.textContent).fontBoundingBoxAscent;
-      ctx.fillText(word.textContent, r.left - c.left, r.top - c.top + ascent);
+      const text = revealed && word.dataset.reveal ? word.dataset.reveal : word.textContent;
+      const ascent = ctx.measureText(text).fontBoundingBoxAscent;
+      ctx.fillText(text, r.left - c.left, r.top - c.top + ascent);
     }
-    textTexture.needsUpdate = true;
+    layer.texture.needsUpdate = true;
   }
 
-  // ---------- simulation (ping-pong between two float targets) ----------
+  // ---------- simulation + reveal mask (each ping-pongs between two float targets) ----------
   const targetOptions = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false };
   let simA = new THREE.WebGLRenderTarget(1, 1, targetOptions);
   let simB = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+  let maskA = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+  let maskB = new THREE.WebGLRenderTarget(1, 1, targetOptions);
 
   const simMaterial = new THREE.ShaderMaterial({
     vertexShader: SIM_VERTEX,
@@ -145,12 +182,25 @@ async function start() {
   const simScene = new THREE.Scene();
   simScene.add(new THREE.Mesh(quad, simMaterial));
 
+  const maskMaterial = new THREE.ShaderMaterial({
+    vertexShader: SIM_VERTEX,
+    fragmentShader: MASK_FRAGMENT,
+    uniforms: {
+      uPrev: { value: null }, uMouse: simMaterial.uniforms.uMouse, uAspect: simMaterial.uniforms.uAspect,
+      uBrush: { value: new THREE.Vector2(...REVEAL_BRUSH) }, uDt: simMaterial.uniforms.uDt, uFade: { value: REVEAL_FADE },
+      uActive: { value: 0 },
+    },
+  });
+  const maskScene = new THREE.Scene();
+  maskScene.add(new THREE.Mesh(quad, maskMaterial));
+
   const displayMaterial = new THREE.ShaderMaterial({
     vertexShader: SIM_VERTEX,
     fragmentShader: DISPLAY_FRAGMENT,
     transparent: true,
     uniforms: {
-      uText: { value: textTexture }, uSim: { value: null },
+      uText: { value: baseLayer.texture }, uTextReveal: { value: revealLayer.texture },
+      uSim: { value: null }, uMask: { value: null },
       uMouse: simMaterial.uniforms.uMouse, uHover: { value: 0 },
       uAspect: simMaterial.uniforms.uAspect, uRadius: { value: RADIUS }, uLens: { value: LENS },
     },
@@ -163,13 +213,16 @@ async function start() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(dpr);
     renderer.setSize(rect.width, rect.height, false);
-    drawText(rect.width, rect.height, dpr);
+    drawText(baseLayer, rect.width, rect.height, dpr, false);
+    drawText(revealLayer, rect.width, rect.height, dpr, true);
 
     const aspect = rect.width / rect.height;
     const simH = Math.max(8, Math.round(SIM_WIDTH / aspect));
-    simA.setSize(SIM_WIDTH, simH);
-    simB.setSize(SIM_WIDTH, simH);
-    for (const t of [simA, simB]) { renderer.setRenderTarget(t); renderer.clear(); }
+    for (const t of [simA, simB, maskA, maskB]) {
+      t.setSize(SIM_WIDTH, simH);
+      renderer.setRenderTarget(t);
+      renderer.clear();
+    }
     renderer.setRenderTarget(null);
     simMaterial.uniforms.uTexel.value.set(1 / SIM_WIDTH, 1 / simH);
     simMaterial.uniforms.uAspect.value = aspect;
@@ -226,7 +279,14 @@ async function start() {
     renderer.render(simScene, camera);
     [simA, simB] = [simB, simA];
 
+    maskMaterial.uniforms.uActive.value = pointer.inside ? 1 : 0;
+    maskMaterial.uniforms.uPrev.value = maskA.texture;
+    renderer.setRenderTarget(maskB);
+    renderer.render(maskScene, camera);
+    [maskA, maskB] = [maskB, maskA];
+
     displayMaterial.uniforms.uSim.value = simA.texture;
+    displayMaterial.uniforms.uMask.value = maskA.texture;
     renderer.setRenderTarget(null);
     renderer.render(displayScene, camera);
   }
@@ -234,6 +294,7 @@ async function start() {
   // Draw the first frame before hiding the page text, so there's never a blank moment.
   resize();
   displayMaterial.uniforms.uSim.value = simA.texture;
+  displayMaterial.uniforms.uMask.value = maskA.texture;
   renderer.render(displayScene, camera);
   hero.classList.add('is-warping');
   new ResizeObserver(resize).observe(hero);
