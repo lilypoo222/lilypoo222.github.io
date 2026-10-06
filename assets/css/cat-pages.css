@@ -1,0 +1,42 @@
+/* Shared by 2D-cat-animations.html and 3D-cat-animations.html: a "home" link with a return arrow
+   in the top-left corner, and a button in the top-right to switch between the 2D and 3D cat.
+   Same pill style as the pages' animation buttons (--chip / --ink come from each page). */
+.cat-page-link {
+  position: fixed;
+  top: 20px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cat-page-link:hover {
+  background: var(--chip-hover);
+}
+
+.cat-page-link:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.cat-page-link svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.cat-page-link--home {
+  left: 20px;
+}
+
+.cat-page-link--switch {
+  right: 20px;
+}

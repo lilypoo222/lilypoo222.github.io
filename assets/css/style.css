@@ -345,6 +345,99 @@ img {
   top: 406.61px;
 }
 
+/* click_me_sticker (Figma 2168:1838): a 239.72px group at (393.14, 407.14) on the 1024 frame,
+   kept the same distance from the bottom as the nav. The sticker: a 160px pink (#ef5fa0) circle
+   with an 8px black border and a soft drop shadow, the cat face (cat-sticker.svg) centred and
+   tilted 8.13°. "Click me!" (Instrument Sans Bold 24px) runs along a 228px circle around it.
+   The text is hidden until you hover the sticker, then writes itself on along the circle: it
+   slides round into place while a sweep reveals it from the "C" to the "!". Only the sticker
+   itself is the hover/click target. */
+@property --sticker-reveal {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 165deg;
+}
+
+.cat-sticker {
+  position: absolute;
+  left: calc(25% + 33.14px);
+  top: calc(100% - 616.86px);
+  width: 239.72px;
+  height: 239.72px;
+  pointer-events: none;
+}
+
+.cat-sticker__badge {
+  position: absolute;
+  left: 39.86px;
+  top: 39.86px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  border: 8px solid #000;
+  border-radius: 93px;
+  background: #ef5fa0;
+  filter: drop-shadow(0 4px 2px rgb(0 0 0 / 0.25));
+  pointer-events: auto;
+}
+
+/* In Figma the face sits in a 95.2 × 99.9 box (the SVG overhangs it by 2px at the sides and
+   bottom), rotated about that box's centre: the same as rotating the SVG and moving it 1px down
+   the tilted axis. */
+.cat-sticker__cat {
+  width: 99.2156px;
+  max-width: none;
+  height: 101.917px;
+  rotate: 8.13deg;
+  translate: -0.14px 0.99px;
+}
+
+.cat-sticker__label {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 24px;
+  fill: #000;
+  /* Hidden: rotated back a little and swept away. Conic angles are clockwise from 12 o'clock;
+     the text spans about 105°–160°. */
+  rotate: 20deg;
+  --sticker-reveal: 165deg;
+  -webkit-mask: conic-gradient(transparent 0 var(--sticker-reveal), #000 var(--sticker-reveal) 168deg, transparent 168deg);
+  mask: conic-gradient(transparent 0 var(--sticker-reveal), #000 var(--sticker-reveal) 168deg, transparent 168deg);
+  transition: rotate 0.3s ease-in, --sticker-reveal 0.3s ease-in;
+}
+
+.cat-sticker:hover .cat-sticker__label,
+.cat-sticker:focus-visible .cat-sticker__label {
+  rotate: 0deg;
+  --sticker-reveal: 98deg;
+  transition: rotate 0.55s cubic-bezier(0.2, 0.8, 0.3, 1), --sticker-reveal 0.55s cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+
+.cat-sticker:focus-visible {
+  outline: none;
+}
+
+.cat-sticker:focus-visible .cat-sticker__badge {
+  outline: 3px solid var(--color-nav-current);
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-sticker__label,
+  .cat-sticker:hover .cat-sticker__label,
+  .cat-sticker:focus-visible .cat-sticker__label {
+    transition: none;
+  }
+}
+
 /* Static nav (Figma "nav bar" + "meet the cat"): the previous nav, hidden for now (the [hidden]
    attribute in index.html). Instrument Sans Bold 18px, 49px up from the bottom of the frame
    (y 975). The page links sit in a row from column 1 with 64px gaps; "meet the cat" starts on

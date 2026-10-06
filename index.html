@@ -55,6 +55,19 @@
       <a class="notepad-nav__cat" href="#">meet the cat</a>
     </nav>
 
+    <!-- click_me_sticker (Figma 2168:1838) at (393, 407): the cat sticker opens the cat animations.
+         "Click me!" sits on a circle around it (text on a path) and writes itself on on hover. -->
+    <a class="cat-sticker" href="2D-cat-animations.html" aria-label="Click me! Open the cat animations">
+      <span class="cat-sticker__badge">
+        <img class="cat-sticker__cat" src="assets/images/cat-sticker.svg" width="99" height="102" alt="">
+      </span>
+      <svg class="cat-sticker__label" viewBox="0 0 239.72 239.72" aria-hidden="true" focusable="false">
+        <!-- 228px circle around the sticker's centre, starting at the "C" and running anticlockwise -->
+        <path id="cat-sticker-arc" d="M160.16 226.5A114 114 0 0 0 79.56 13.22A114 114 0 0 0 160.16 226.5" fill="none"/>
+        <text><textPath href="#cat-sticker-arc">Click me!</textPath></text>
+      </svg>
+    </a>
+
     <!-- static nav: the previous nav bar along the bottom of the frame. Hidden for now (kept in
          case it comes back). -->
     <nav class="static-nav container grid" aria-label="Main" hidden>
