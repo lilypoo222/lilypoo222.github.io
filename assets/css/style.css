@@ -1,6 +1,7 @@
 /* ---------- Fonts ---------- */
-/* Instrument Serif (SIL Open Font License, see assets/fonts/OFL.txt), self-hosted.
-   Regular for "DESIGN" / "LOVE", Italic for "is celebrating what you". */
+/* All self-hosted, SIL Open Font License (see assets/fonts/OFL-*.txt).
+   Instrument Serif: Regular for "DESIGN" / "LOVE", Italic for "is celebrating what you".
+   Instrument Sans Bold: the "I want to play!" thought cloud. */
 @font-face {
   font-family: "Instrument Serif";
   font-style: normal;
@@ -34,8 +35,26 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/instrument-sans-bold-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/instrument-sans-bold-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
 }
 
 .font-display {
@@ -134,6 +153,119 @@ img {
   background: rgb(255 0 0 / 0.08);
 }
 
+/* ---------- Home frame ---------- */
+/* Figma: Portfolio_02 > Portfolio_Idea2 (1440 × 1024). Everything that isn't on the grid is placed
+   with the frame's own coordinates; horizontal positions use the same "% of frame width + px" that
+   Figma reports, so they track the frame on narrower screens. The circle runs off the frame's
+   right and bottom edges, as in Figma. */
+.home {
+  position: relative;
+  width: 100%;
+  max-width: var(--canvas-width);
+  height: 1024px;
+  margin-inline: auto;
+  overflow-y: clip;
+}
+
+/* Ellipse 1: 1199px circle outline at x (41.67% + 26px), y 427. */
+.home__circle {
+  position: absolute;
+  left: calc(41.6667% + 26px);
+  top: 427px;
+  width: 1199px;
+  max-width: none;
+  height: 1199px;
+  pointer-events: none;
+}
+
+/* cat_vector: the 2D cat (frame 2105:473) and its shadow, at x (83.33% − 43px), y 640.37. */
+.home__cat {
+  position: absolute;
+  left: calc(83.3333% - 43px);
+  top: 640.37px;
+}
+
+.home__cat-shadow {
+  position: absolute;
+  left: 110.61px;
+  top: 303.63px;
+  width: 122.075px;
+  max-width: none;
+  height: 22.928px;
+  transform: translateX(-50%);
+}
+
+/* The cat's hop, from the Figma motion: three 14.872px hops in the first third of a 2 s loop. */
+.home__cat-art {
+  position: relative;
+  left: -1.85px;
+  width: 226.93px;
+  max-width: none;
+  height: 316.651px;
+  animation: cat-hop 2s linear infinite;
+}
+
+@keyframes cat-hop {
+  0%      { translate: 0 0; }
+  4.863%  { translate: 0 -14.872px; }
+  10.293% { translate: 0 0; }
+  17.15%  { translate: 0 -14.872px; }
+  22.678% { translate: 0 0; }
+  28.759% { translate: 0 -14.872px; }
+  33.956% { translate: 0 0; }
+  100%    { translate: 0 0; }
+}
+
+/* iwanttoplay: mirrored thinking cloud with "I want" / "to" (32px) and "play!" (48px) in
+   Instrument Sans Bold, each word rotated. Group at x (66.67% − 7px), y 498.63; each word is
+   centred in the box Figma gives for it. */
+.home__play {
+  position: absolute;
+  left: calc(66.6667% - 7px);
+  top: 498.63px;
+  width: 224px;
+  height: 235.567px;
+  margin: 0;
+}
+
+.home__cloud {
+  position: absolute;
+  inset: 0;
+  width: 224px;
+  max-width: none;
+  height: 235.567px;
+  transform: scaleX(-1);
+}
+
+.home__play-word {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  line-height: normal;
+  color: #000;
+  white-space: nowrap;
+}
+
+.home__play-word > span {
+  display: block;
+  /* Figma trims the text box to cap height + baseline; centre the words the same way. */
+  text-box: trim-both cap alphabetic;
+  rotate: var(--rotate);
+}
+
+.home__play-word--i-want { left: 30px;  top: 53.37px; width: 92.318px;  height: 28.949px; font-size: 32px; --rotate: -3.78deg; }
+.home__play-word--to     { left: 130px; top: 52.37px; width: 37.03px;   height: 29.304px; font-size: 32px; --rotate: 11.89deg; }
+.home__play-word--play   { left: 64px;  top: 82.37px; width: 113.167px; height: 51.819px; font-size: 48px; --rotate: 9.11deg; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home__cat-art {
+    animation: none;
+  }
+}
+
 /* ---------- Hero ---------- */
 /* hero_text_animated: Instrument Serif, starting at column 1 and ending on the right edge of
    column 9. On the 1440 canvas that is exactly --typography-size-xxl (128px); on narrower
@@ -141,6 +273,7 @@ img {
    Line spacing (0.743em, from Figma), letter-spacing and the warp canvas are relative to the font
    size, so they follow it. */
 .hero {
+  position: relative;
   padding-top: 72px;
   /* Lets the hero text size itself from the grid's real width (cqi), not the window's. */
   container-type: inline-size;
