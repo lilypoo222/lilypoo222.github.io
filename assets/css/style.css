@@ -157,15 +157,52 @@ img {
 /* Figma: Portfolio_02 > Portfolio_Idea2 (1440 × 1024). Everything that isn't on the grid is placed
    with the frame's own coordinates; horizontal positions use the same "% of frame width + px" that
    Figma reports, so they track the frame on narrower screens. The circle runs off the frame's
-   right and bottom edges, as in Figma. */
+   right and bottom edges, as in Figma. Nothing shows outside the centred 1440 canvas: on wider
+   screens the frame stays put and anything that runs off it (the hill) is cut at its edges. */
 .home {
   position: relative;
   width: 100%;
   max-width: var(--canvas-width);
   height: 1024px;
   margin-inline: auto;
-  overflow-y: clip;
+  overflow: clip;
 }
+
+/* .canvas wraps .home: same centred 1440 box, but it doesn't clip, so it can draw the seams
+   across the frame's edges while .home keeps cutting its own content at those edges.
+   Seams: a dashed stroke down each side of the canvas, like a sewing seam / bullet-journal
+   staples. Centre stroke (half outside, half inside the edge), 2px, round caps, 12px dashes with
+   12px gaps (Figma-style: the round caps add 1px to each end, so each dash looks 14px long with
+   10px between). As tall as the canvas, so they grow with it. The dash tile is an SVG mask; the
+   colour comes from --seam-color. Drawn above the frame's content so the hill doesn't cover the
+   inner half. */
+:root {
+  --seam-color: #000;
+  --seam-weight: 2px;
+}
+
+.canvas {
+  position: relative;
+  max-width: var(--canvas-width);
+  margin-inline: auto;
+}
+
+.canvas::before,
+.canvas::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: var(--seam-weight);
+  background: var(--seam-color);
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='24'%3E%3Cline x1='1' y1='1' x2='1' y2='13' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") top / 2px 24px repeat-y;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='24'%3E%3Cline x1='1' y1='1' x2='1' y2='13' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") top / 2px 24px repeat-y;
+}
+
+.canvas::before { left: calc(var(--seam-weight) / -2); }
+.canvas::after  { right: calc(var(--seam-weight) / -2); }
 
 /* Ellipse 1: the green hill (1199px circle, #849C61 with a #607246 stroke), top-left at
    (998, 691) on the 1440 frame; x is written as (66.67% + 38px) so it tracks the frame on
