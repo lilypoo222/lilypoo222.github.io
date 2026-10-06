@@ -135,21 +135,35 @@ img {
 }
 
 /* ---------- Hero ---------- */
-/* hero_text_animated: Instrument Serif at --typography-size-xxl (128px), starting at column 1 and
-   running to about the right edge of column 9. Line spacing (0.743em, from Figma) and the warp
-   canvas are relative to the font size, so they follow it. */
+/* hero_text_animated: Instrument Serif, starting at column 1 and ending on the right edge of
+   column 9. On the 1440 canvas that is exactly --typography-size-xxl (128px); on narrower
+   screens (e.g. 1280 laptops) the text scales down with the columns so it still ends on column 9.
+   Line spacing (0.743em, from Figma), letter-spacing and the warp canvas are relative to the font
+   size, so they follow it. */
 .hero {
   padding-top: 72px;
+  /* Lets the hero text size itself from the grid's real width (cqi), not the window's. */
+  container-type: inline-size;
 }
 
 .hero-text {
-  grid-column: 1 / span 9;
+  /* Longest line ("DESIGN is celebrating", to the tip of the "g", with the letter-spacing) in em. */
+  --hero-line-em: 7.6953;
+  --hero-columns: 9;
+  grid-column: 1 / span var(--hero-columns);
   position: relative;
   width: fit-content;
   margin: 0;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: var(--typography-size-xxl);
+  font-size: min(
+    var(--typography-size-xxl),
+    calc(
+      (var(--hero-columns) * (100cqi - (var(--grid-columns) - 1) * var(--grid-gutter)) / var(--grid-columns)
+        + (var(--hero-columns) - 1) * var(--grid-gutter))
+      / var(--hero-line-em)
+    )
+  );
   line-height: 0.743;
   /* A hair of spacing (0.12px at 128px) so the "g" of "celebrating" lands exactly on the right
      edge of column 9. */
