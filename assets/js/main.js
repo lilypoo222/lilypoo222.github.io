@@ -95,3 +95,26 @@
     link.addEventListener('blur', () => erase(link));
   }
 })();
+
+// Thought cloud: swap the <img> for the same SVG inline (thinking-cloud.svg, shapes unchanged) so
+// the bubble and its three trailing circles can each boil on their own (see .home__cloud-part).
+// If this doesn't run, the plain image stays.
+(async () => {
+  const img = document.querySelector('img.home__cloud');
+  if (!img) return;
+  const PARTS = {
+    Vector: 'home__cloud-bubble',
+    Vector_2: 'home__cloud-circle-1',   // biggest, next to the bubble
+    Vector_3: 'home__cloud-circle-2',
+    Vector_4: 'home__cloud-circle-3',   // smallest
+  };
+  try {
+    const doc = new DOMParser().parseFromString(await (await fetch(img.src)).text(), 'image/svg+xml');
+    const svg = document.importNode(doc.documentElement, true);
+    for (const [id, name] of Object.entries(PARTS)) svg.getElementById(id)?.setAttribute('class', `home__cloud-part ${name}`);
+    for (const node of svg.querySelectorAll('[id]')) node.removeAttribute('id');
+    svg.setAttribute('class', 'home__cloud');
+    svg.setAttribute('aria-hidden', 'true');
+    img.replaceWith(svg);
+  } catch { /* keep the image */ }
+})();

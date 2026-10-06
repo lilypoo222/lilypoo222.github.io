@@ -500,8 +500,70 @@ img {
 .home__play-word--to     { left: 130px; top: 52.37px; width: 37.03px;   height: 29.304px; font-size: 32px; --rotate: 11.89deg; }
 .home__play-word--play   { left: 64px;  top: 82.37px; width: 113.167px; height: 51.819px; font-size: 48px; --rotate: 9.11deg; }
 
+.boil-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* Hand-drawn "boil" (posterized time) on the thought cloud, every piece on its own: the bubble,
+   its three trailing circles, and the words "I want", "to" and "play!". Each piece steps between
+   four soft wobble filters (#boil-1–4 in index.html) on held frames at about 4 fps, and nudges a
+   fraction of a pixel on the same beat, at a slightly different pace so they never line up.
+   The cloud's shapes come from thinking-cloud.svg, put inline by main.js so each can move; the
+   text wobbles on the inner span (before its rotation), the nudges on the outer box. */
+.home__cloud-part {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: play-boil var(--boil-loop) steps(1, end) infinite,
+    play-jitter var(--boil-loop) steps(1, end) infinite;
+}
+
+.home__cloud-bubble   { --boil-loop: 1s; }
+.home__cloud-circle-1 { --boil-loop: 0.96s; animation-delay: -0.2s; }
+.home__cloud-circle-2 { --boil-loop: 1.08s; animation-delay: -0.45s; }
+.home__cloud-circle-3 { --boil-loop: 0.88s; animation-delay: -0.7s; }
+
+.home__play-word {
+  animation: play-jitter var(--boil-loop) steps(1, end) infinite;
+}
+
+.home__play-word > span {
+  animation: play-boil var(--boil-loop) steps(1, end) infinite;
+}
+
+.home__play-word--i-want { --boil-loop: 1.12s; }
+.home__play-word--to     { --boil-loop: 0.92s; }
+.home__play-word--play   { --boil-loop: 1.04s; }
+
+.home__play-word--i-want,
+.home__play-word--i-want > span { animation-delay: -0.3s; }
+.home__play-word--to,
+.home__play-word--to > span     { animation-delay: -0.55s; }
+.home__play-word--play,
+.home__play-word--play > span   { animation-delay: -0.8s; }
+
+@keyframes play-boil {
+  0%   { filter: url(#boil-1); }
+  25%  { filter: url(#boil-2); }
+  50%  { filter: url(#boil-3); }
+  75%  { filter: url(#boil-4); }
+  100% { filter: url(#boil-1); }
+}
+
+@keyframes play-jitter {
+  0%   { translate: 0 0;             rotate: 0deg; }
+  25%  { translate: 0.4px -0.3px;    rotate: 0.22deg; }
+  50%  { translate: -0.3px 0.4px;    rotate: -0.15deg; }
+  75%  { translate: 0.25px 0.3px;    rotate: 0.12deg; }
+  100% { translate: 0 0;             rotate: 0deg; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .home__cat-art {
+  .home__cat-art,
+  .home__play-word > span,
+  .home__cloud-part,
+  .home__play-word {
     animation: none;
   }
 }

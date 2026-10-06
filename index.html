@@ -67,6 +67,15 @@
       <a class="static-nav__cat" href="#">meet the cat</a>
     </nav>
 
+    <!-- Hand-drawn "boil" filters for the thought cloud: the same gentle wobble with four different
+         noise seeds; each piece of the cloud steps between them (see .home__cloud-part in style.css). -->
+    <svg class="boil-filters" width="0" height="0" aria-hidden="true" focusable="false">
+      <filter id="boil-1" x="-20%" y="-30%" width="140%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="1" seed="1"/><feDisplacementMap in="SourceGraphic" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="boil-2" x="-20%" y="-30%" width="140%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="1" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="boil-3" x="-20%" y="-30%" width="140%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="1" seed="13"/><feDisplacementMap in="SourceGraphic" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="boil-4" x="-20%" y="-30%" width="140%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="1" seed="21"/><feDisplacementMap in="SourceGraphic" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+    </svg>
+
     <!-- iwanttoplay: thought cloud -->
     <p class="home__play">
       <img class="home__cloud" src="assets/images/thinking-cloud.svg" width="224" height="236" alt="">
