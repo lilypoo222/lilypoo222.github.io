@@ -73,6 +73,7 @@
 :root {
   /* Layout grid (Figma: 12 columns, stretch, auto width, 60px margin, 20px gutter on a 1440 canvas) */
   --canvas-width: 1440px;
+  --canvas-min-height: 800px;
   --grid-columns: 12;
   --grid-margin: 60px;
   --grid-gutter: 20px;
@@ -162,12 +163,19 @@ img {
    with the frame's own coordinates; horizontal positions use the same "% of frame width + px" that
    Figma reports, so they track the frame on narrower screens. The circle runs off the frame's
    right and bottom edges, as in Figma. Nothing shows outside the centred 1440 canvas: on wider
-   screens the frame stays put and anything that runs off it (the hill) is cut at its edges. */
+   screens the frame stays put and anything that runs off it (the hill) is cut at its edges.
+   Height: the frame fills the browser window (100dvh) instead of a fixed 1024. The hero is
+   pinned to the top; the hill, grass, cat and cloud keep their Figma distances from the bottom
+   (written as 100% − (1024 − y)), so they always sit at the bottom of the window. Below
+   --canvas-min-height the frame stops shrinking (and scrolls) so the cloud never runs into
+   the hero text. */
 .home {
   position: relative;
   width: 100%;
   max-width: var(--canvas-width);
-  height: 1024px;
+  height: 100vh;
+  height: 100dvh;
+  min-height: var(--canvas-min-height);
   margin-inline: auto;
   overflow: clip;
 }
@@ -215,7 +223,7 @@ img {
 .home__circle {
   position: absolute;
   left: calc(66.6667% + 38px);
-  top: 691px;
+  top: calc(100% - 333px);
   width: 1199px;
   max-width: none;
   height: 1199px;
@@ -226,7 +234,7 @@ img {
 .home__grass {
   position: absolute;
   left: calc(75% + 45.27px);
-  top: 789.46px;
+  top: calc(100% - 234.54px);
   width: 331.028px;
   max-width: none;
   height: 224.14px;
@@ -270,7 +278,7 @@ img {
 .home__cat {
   position: absolute;
   left: calc(83.3333% - 43px);
-  top: 640.37px;
+  top: calc(100% - 383.63px);
 }
 
 /* On the homepage the shadow is dark green (#607246, as in Figma): the shared cat-shadow.svg
@@ -314,7 +322,7 @@ img {
 .home__play {
   position: absolute;
   left: calc(66.6667% - 7px);
-  top: 498.63px;
+  top: calc(100% - 525.37px);
   width: 224px;
   height: 235.567px;
   margin: 0;
