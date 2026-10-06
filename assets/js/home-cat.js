@@ -4,6 +4,8 @@
 //   playing the Walk state 2× faster, so it looks a bit frantic.
 // - It's magnetic: the further you pull, the harder it resists, and its feet can never leave the
 //   green circle (the hill).
+// - It's held by the head like a ragdoll: the body swings from the neck after the head, and the
+//   legs, arms and tail flop a beat behind.
 // - Let go and gravity snaps it back down with one small bounce and a squash on landing, then it
 //   eases back into the artwork's pose and the plain SVG takes over again.
 
@@ -68,15 +70,17 @@ function buildRig(idle) {
   };
   parts.armL.append(arms.L.down, el('g', {}, arms.L.up));
   parts.armR.append(arms.R.down, el('g', {}, arms.R.up));
-  const root = el('g', {},
-    parts.tail, parts.legL, parts.legR, solid(TORSO), parts.armL, parts.armR, asset(idle, 'Belly'), parts.head);
+  // Everything below the head, so it can swing from the neck (ragdoll) while the head is held.
+  const body = el('g', {},
+    parts.tail, parts.legL, parts.legR, solid(TORSO), parts.armL, parts.armR, asset(idle, 'Belly'));
+  const root = el('g', {}, body, parts.head);
   // Same box as the <img>: the artwork's bounds in rig coordinates.
   const svg = el('svg', {
     class: 'home__cat-rig',
     viewBox: `${RIG_ORIGIN[0]} ${RIG_ORIGIN[1]} ${ART_SIZE[0] * RIG_SCALE} ${ART_SIZE[1] * RIG_SCALE}`,
     'aria-hidden': 'true',
   }, root);
-  return { svg, root, parts, arms };
+  return { svg, root, body, parts, arms };
 }
 
 // ---------- poses ----------
@@ -88,6 +92,7 @@ const lerp = (a, b, v) => a + (b - a) * v;
 const REST = {
   y: 0, squash: 1, lean: 0, headY: 0, headTilt: 0,
   armL: 0, armR: 0, legLy: 0, legLz: 0, legRy: 0, legRz: 0, tail: 0,
+  swing: 0,   // body rotation about the neck (ragdoll), radians, + = feet swung right
 };
 // The artwork's own pose (arms up), so the rig and the <img> match at the hand-over.
 const ART_POSE = { ...REST, armL: ARM_UP, armR: -ARM_UP };
@@ -119,6 +124,7 @@ function applyPose(rig, p) {
   const side = 1 / Math.sqrt(p.squash);
   rig.root.setAttribute('transform',
     `translate(0 ${-p.y}) translate(${fx} ${fy}) rotate(${-p.lean * DEG}) scale(${side} ${p.squash}) translate(${-fx} ${-fy})`);
+  rig.body.setAttribute('transform', about(PIVOTS.head, -p.swing * DEG));
   rig.parts.head.setAttribute('transform', `translate(0 ${p.headY}) ${about(PIVOTS.head, p.headTilt * DEG)}`);
   rig.parts.tail.setAttribute('transform', about(PIVOTS.tail, p.tail * DEG));
   placeArm(rig.parts.armL, rig.arms.L, PIVOTS.armL, p.armL, 1);
@@ -142,6 +148,12 @@ const BOUNCE = 0.3;          // share of the landing speed kept for the bounce
 const STOP_SPEED = 160;      // px/s, landings slower than this don't bounce
 const SIDE_GIVE = 40;        // px, most it slides sideways
 const EDGE_MARGIN = 6;       // px, feet stay this far inside the circle's edge
+// Ragdoll: it's held by the head, and the body hangs from the neck like a weight on a short rope,
+// so it swings after the head when you move it, and the limbs flop a beat behind the body.
+const ROPE = 40;             // px, neck to the body's weight (shorter = quicker swing)
+const SWING_GRAVITY = 2400;  // px/s², how hard the body is pulled back to hanging straight
+const SWING_DAMPING = 3;     // per second, how fast the swinging dies down
+const MAX_SWING = 1.2;       // radians (~70°)
 // Feet (the rig's PIVOTS.feet) in px from the top-left of .home__cat.
 const FEET = [(PIVOTS.feet[0] - RIG_ORIGIN[0]) / RIG_SCALE - 1.85, (PIVOTS.feet[1] - RIG_ORIGIN[1]) / RIG_SCALE];
 
@@ -164,7 +176,8 @@ async function init() {
 
   // mode: 'rest' (plain artwork) | 'held' | 'falling' | 'settling'
   const s = { mode: 'rest', x: 0, up: 0, vy: 0, grabAt: 0, settleAt: 0, impactAt: -1, impact: 0,
-    fromPose: ART_POSE, lastPose: ART_POSE, hopY: 0, pointer: null, start: null, room: 0, circle: null, feet0: null };
+    fromPose: ART_POSE, lastPose: ART_POSE, hopY: 0, pointer: null, start: null, room: 0, circle: null, feet0: null,
+    bob: [0, ROPE], bobV: [0, 0], swing: 0, swingV: 0 };
   const now = () => performance.now() / 1000;
   let raf = 0;
 
@@ -202,6 +215,10 @@ async function init() {
       s.hopY = -parseFloat(getComputedStyle(art).translate.split(' ')[1] || 0) || 0;
       s.x = 0;
       s.up = 0;
+      s.bob = [0, ROPE];
+      s.bobV = [0, 0];
+      s.swing = 0;
+      s.swingV = 0;
       s.fromPose = ART_POSE;
       s.grabAt = now();
       cat.classList.add('is-held');
@@ -257,13 +274,49 @@ async function init() {
       }
     }
 
+    // Ragdoll: move the body's weight, keep it one rope-length from the neck, and read off the
+    // angle. While falling, the weight falls with the cat, so only SWING_GRAVITY acts relative to it.
+    const anchor = [s.x, -s.up];
+    const fall = s.mode === 'falling' ? GRAVITY : 0;
+    const keep = Math.exp(-dt * SWING_DAMPING);
+    const before = [...s.bob];
+    s.bobV = [s.bobV[0] * keep, (s.bobV[1] + (SWING_GRAVITY + fall) * dt) * keep];
+    const free = [s.bob[0] + s.bobV[0] * dt, s.bob[1] + s.bobV[1] * dt];
+    const d = [free[0] - anchor[0], free[1] - anchor[1]];
+    const len = Math.hypot(...d) || 1;
+    s.bob = [anchor[0] + (d[0] * ROPE) / len, anchor[1] + (d[1] * ROPE) / len];
+    if (dt > 0) s.bobV = [(s.bob[0] - before[0]) / dt, (s.bob[1] - before[1]) / dt];
+    const swing = Math.max(-MAX_SWING, Math.min(MAX_SWING, Math.atan2(d[0], d[1])));
+    if (dt > 0) s.swingV = lerp(s.swingV, (swing - s.swing) / dt, 0.3);
+    s.swing = swing;
+
     // Pose: walk while held or in the air, then ease back into the artwork's pose.
     let pose;
+    let floppy = 1;
     if (s.mode === 'settling') {
-      pose = mix(s.fromPose, ART_POSE, easeInOut(clamp01((t - s.settleAt) / SETTLE_BLEND)));
+      const b = easeInOut(clamp01((t - s.settleAt) / SETTLE_BLEND));
+      pose = mix(s.fromPose, ART_POSE, b);
+      floppy = 1 - b;
     } else {
       pose = mix(s.fromPose, walk(t - s.grabAt), easeInOut(clamp01((t - s.grabAt) / GRAB_BLEND)));
       s.lastPose = pose;
+    }
+    // The body swings from the neck; the limbs try to keep hanging down and trail the swing.
+    const flop = (k, lag, max) => Math.max(-max, Math.min(max, (s.swing * k + s.swingV * lag) * floppy));
+    pose = {
+      ...pose,
+      swing: s.swing * floppy,
+      headTilt: pose.headTilt + s.swing * 0.12 * floppy,
+      legLz: pose.legLz + flop(0.5, 0.04, 0.6),
+      legRz: pose.legRz + flop(0.5, 0.04, 0.6),
+      armL: pose.armL + flop(0.4, 0.03, 0.4),
+      armR: pose.armR + flop(0.4, 0.03, 0.4),
+      tail: pose.tail + flop(0.6, 0.06, 0.8),
+    };
+    if (s.mode !== 'settling') {
+      // Keep the arms on their "down" drawing while flopping (past ±0.28 the rig swaps drawings).
+      pose.armL = Math.min(pose.armL, 0.27);
+      pose.armR = Math.max(pose.armR, -0.27);
     }
     // Follow-through: a squash on each landing that wobbles out.
     const since = t - s.impactAt;
