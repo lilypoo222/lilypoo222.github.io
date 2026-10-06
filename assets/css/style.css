@@ -167,8 +167,9 @@ img {
   overflow-y: clip;
 }
 
-/* Ellipse 1: 1199px circle outline, top-left at (998, 691) on the 1440 frame; x is written as
-   (66.67% + 38px) so it tracks the frame on narrower screens like the other elements. */
+/* Ellipse 1: the green hill (1199px circle, #849C61 with a #607246 stroke), top-left at
+   (998, 691) on the 1440 frame; x is written as (66.67% + 38px) so it tracks the frame on
+   narrower screens like the other elements. */
 .home__circle {
   position: absolute;
   left: calc(66.6667% + 38px);
@@ -176,6 +177,17 @@ img {
   width: 1199px;
   max-width: none;
   height: 1199px;
+  pointer-events: none;
+}
+
+/* grass_scribbles: on the hill, top-left at (1125.3, 789.5) on the 1440 frame. */
+.home__grass {
+  position: absolute;
+  left: calc(75% + 45.27px);
+  top: 789.46px;
+  width: 331.028px;
+  max-width: none;
+  height: 224.14px;
   pointer-events: none;
 }
 
