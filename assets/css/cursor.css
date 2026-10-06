@@ -1,8 +1,8 @@
 /* ---------- Star cursor (global: include on every page, with assets/js/cursor.js) ---------- */
 /* The cursor is assets/images/star_cursor.svg (127 × 122) shown at ¼ size (~32px); the click
    point is the tip of the star's upper-left point.
-   - Normally: a white star blended with "difference", so it's black over light areas, white over
-     dark ones, and inverts any other colour — always visible.
+   - Normally: black over anything light and white over anything dark (never a colour) — always
+     visible.
    - Over anything clickable: pink (--cursor-hover-color), or green
      (--cursor-hover-contrast-color) when the thing under it is that same pink.
    Without the script (or on touch screens), the plain star below is used as a normal cursor. */
@@ -38,8 +38,22 @@ button {
   transition: background-color 0.15s ease;
 }
 
+/* Pure black or white, never a colour: the star shows what's behind it in greyscale, pushed to
+   black or white (contrast) and then flipped (invert), so it's black over anything light and white
+   over anything dark. Browsers without backdrop-filter keep the "difference" star above. */
+@supports (backdrop-filter: invert(1)) or (-webkit-backdrop-filter: invert(1)) {
+  .star-cursor {
+    background: transparent;
+    mix-blend-mode: normal;
+    -webkit-backdrop-filter: grayscale(1) contrast(100) invert(1);
+    backdrop-filter: grayscale(1) contrast(100) invert(1);
+  }
+}
+
 .star-cursor.is-over-clickable {
   mix-blend-mode: normal;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background: var(--cursor-hover-color);
 }
 

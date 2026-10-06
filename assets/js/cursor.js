@@ -1,6 +1,6 @@
 // Star cursor (global: include on every page, with assets/css/cursor.css).
-// A star that follows the mouse: black/white "difference" normally so it's always visible, pink
-// over anything clickable, and green over clickable things that are already that pink.
+// A star that follows the mouse: black over light areas and white over dark ones so it's always
+// visible, pink over anything clickable, and green over clickable things that are already that pink.
 // Mouse/trackpad only; touch screens keep the CSS fallback (or no cursor at all).
 (() => {
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
