@@ -61,6 +61,9 @@
   /* Figma variables */
   --color-lime-green: #b5ef5f;
   --size-s: 16px;
+
+  /* Typography (Figma collection "typography": size-xxl → --typography-size-xxl) */
+  --typography-size-xxl: 128px;
 }
 
 /* Base styles */
@@ -132,21 +135,21 @@ img {
 }
 
 /* ---------- Hero ---------- */
-/* Figma (1440 wide): hero_text_animated is Instrument Serif at 144.08px, starting at column 1
-   (x 60), with baselines at y 217.5 and 324.5 (107px apart). It scales down to fit narrower
-   screens (the longest line is about 7.7em wide). */
+/* hero_text_animated: Instrument Serif at --typography-size-xxl (128px), starting at column 1 and
+   running to about the right edge of column 9. Line spacing (0.743em, from Figma) and the warp
+   canvas are relative to the font size, so they follow it. */
 .hero {
-  padding-top: 115px;
+  padding-top: 72px;
 }
 
 .hero-text {
-  grid-column: 1 / -1;
+  grid-column: 1 / span 9;
   position: relative;
   width: fit-content;
   margin: 0;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: min(144.08px, calc((min(100vw, var(--canvas-width)) - 2 * var(--grid-margin)) / 7.7));
+  font-size: var(--typography-size-xxl);
   line-height: 0.743;
   color: #000;
 }

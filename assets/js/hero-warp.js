@@ -105,8 +105,11 @@ async function start() {
   function drawText(cw, ch, dpr) {
     // Draw each word exactly where the (invisible) page text sits, in its own font style.
     const c = canvas.getBoundingClientRect();
-    textCanvas.width = Math.round(cw * dpr);
-    textCanvas.height = Math.round(ch * dpr);
+    const w = Math.round(cw * dpr), h = Math.round(ch * dpr);
+    // A texture can't change size in place: free the old one so the GPU copy is re-created.
+    if (textCanvas.width !== w || textCanvas.height !== h) textTexture.dispose();
+    textCanvas.width = w;
+    textCanvas.height = h;
     const ctx = textCanvas.getContext('2d');
     ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
     ctx.scale(dpr, dpr);
