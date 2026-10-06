@@ -167,11 +167,12 @@ img {
   overflow-y: clip;
 }
 
-/* Ellipse 1: 1199px circle outline at x (41.67% + 26px), y 427. */
+/* Ellipse 1: 1199px circle outline, top-left at (998, 691) on the 1440 frame; x is written as
+   (66.67% + 38px) so it tracks the frame on narrower screens like the other elements. */
 .home__circle {
   position: absolute;
-  left: calc(41.6667% + 26px);
-  top: 427px;
+  left: calc(66.6667% + 38px);
+  top: 691px;
   width: 1199px;
   max-width: none;
   height: 1199px;
