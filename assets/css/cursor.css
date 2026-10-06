@@ -61,6 +61,18 @@ button {
   background: var(--cursor-hover-contrast-color);
 }
 
+/* Sparkle trail behind the cursor (cursor.js). The sparkles are drawn white and shown with
+   "difference", so like the star they're dark over light areas and light over dark ones. */
+.cursor-trail {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: difference;
+}
+
 /* While the star is active, hide the system cursor everywhere (even where a page sets its own). */
 html.has-star-cursor,
 html.has-star-cursor * {
