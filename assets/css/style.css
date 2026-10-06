@@ -231,14 +231,18 @@ img {
   top: 640.37px;
 }
 
+/* On the homepage the shadow is dark green (#607246, as in Figma): the shared cat-shadow.svg
+   shape, filled with that colour here. The file itself stays grey for other uses. */
 .home__cat-shadow {
   position: absolute;
   left: 110.61px;
   top: 303.63px;
   width: 122.075px;
-  max-width: none;
   height: 22.928px;
   transform: translateX(-50%);
+  background: #607246;
+  -webkit-mask: url("../images/cat-shadow.svg") center / 100% 100% no-repeat;
+  mask: url("../images/cat-shadow.svg") center / 100% 100% no-repeat;
 }
 
 /* The cat's hop, from the Figma motion: three 14.872px hops in the first third of a 2 s loop. */
