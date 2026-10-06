@@ -305,6 +305,37 @@ img {
   animation: cat-hop 2s linear infinite;
 }
 
+/* Dragging the cat (assets/js/home-cat.js): while it's held or falling, the plain artwork hides and
+   the animated rig (same drawing, same box) takes its place, above the thought cloud. */
+.home__cat {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.home__cat.is-held {
+  z-index: 1;
+}
+
+.home__cat-rig {
+  position: absolute;
+  left: -1.85px;
+  top: 0;
+  width: 226.93px;
+  height: 316.651px;
+  overflow: visible;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.home__cat.is-held .home__cat-rig {
+  visibility: visible;
+}
+
+.home__cat.is-held .home__cat-art {
+  visibility: hidden;
+}
+
 @keyframes cat-hop {
   0%      { translate: 0 0; }
   4.863%  { translate: 0 -14.872px; }
