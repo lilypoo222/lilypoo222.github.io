@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2D Cat Animations</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --ink: #111111;
+      --muted: #6b6b6b;
+      --chip: #f1f1f1;
+      --chip-hover: #e6e6e6;
+    }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
+    #stage {
+      position: fixed; inset: 0 0 72px; display: grid; place-items: center;
+    }
+    #stage svg { height: min(100vh - 130px, 640px); width: auto; max-width: 90vw; overflow: visible; }
+    #states {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+      width: max-content; max-width: calc(100% - 32px);
+    }
+    #states button {
+      font: inherit; font-size: 14px; font-weight: 600;
+      padding: 8px 14px; border: 0; border-radius: 999px;
+      background: var(--chip); color: var(--ink); cursor: pointer;
+    }
+    #states button:hover { background: var(--chip-hover); }
+    #states button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+    #states button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+<div id="stage"></div>
+<nav id="states" aria-label="Animation"></nav>
+
+<script type="module">
+// The 2D cat's animation states — the same five states, poses and timing as 3D-cat-animations.html,
+// drawn with the site's 2D cat artwork (assets/images/2D-cat-idle.svg, 2D-cat-happy.svg,
+// cat-shadow.svg). Only the motions that exist in a flat, front-on drawing apply: the 3D page's
+// turning toward/away from the viewer and its forward/back arm and leg swings have no 2D equivalent.
+//
+// Everything is rigged in the original design's coordinates (Figma "Cat Character" frame), which
+// is where the pivots and pose values come from. The site's 2D files are the same drawing at
+// 0.61967× scale, so they're placed with ASSET_TO_RIG.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ASSET_TO_RIG = 'matrix(1.613754 0 0 1.613754 117.0016 66.0025)';
+const DEG = 180 / Math.PI;
+
+// Shapes in rig coordinates that aren't in the 2D files.
+// Arms at the sides: Figma frame 9:189.
+const ARMS_DOWN = {
+  L: 'M212.863 458.598C226.896 450.831 245.847 443.407 262.143 432V472C250.048 475.456 234.968 479.658 219.482 482.672C214.623 483.617 209.452 484.286 204.896 482.348C200.712 480.567 199.027 477.536 199.842 473.256C201.112 466.589 206.925 461.885 212.863 458.598Z',
+  R: 'M386.28 458.598C372.246 450.831 353.296 443.407 337 432V472C349.095 475.456 364.175 479.658 379.661 482.672C384.52 483.617 389.691 484.286 394.246 482.348C398.431 480.567 400.116 477.536 399.301 473.256C398.031 466.589 392.218 461.885 386.28 458.598Z',
+};
+// The body outline split into torso + two legs (same outline, so the legs can move on their own).
+const TORSO = 'M262.143 432H334.143V472L335.86 536H260.43L262.143 472Z';
+const LEGS = {
+  L: 'M260.56 530L260.143 548C260.143 565.333 265.476 574 276.143 574C285.476 574 290.143 566.667 290.143 552C292.6 549.6 295.2 548.3 298.143 548.2V530Z',
+  R: 'M298.143 530V548.2C301.1 548.3 303.7 549.6 306.143 552C306.143 566.667 310.809 574 320.143 574C330.809 574 336.143 565.333 336.143 548L335.72 530Z',
+};
+// The pout (Mad Pout) and the anger mark, as on the 3D cat.
+const POUT = 'M285 364C288.5 354.5 295 352.5 300.5 359.5C306 352.5 312.5 354.5 316 364';
+const ANGER_MARK = { x: 402, y: 172, r: 21, gap: 5 };
+function angerMarkPath({ x, y, r, gap }) {
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  return corners.map(([sx, sy]) =>
+    `M${x + sx * r} ${y + sy * gap}Q${x + sx * gap} ${y + sy * gap} ${x + sx * gap} ${y + sy * r}`).join('');
+}
+
+const PIVOTS = {
+  feet: [298, 577], head: [298, 440], tail: [256, 516],
+  armL: [262, 452], armR: [336, 452],   // shoulders
+  legL: [283, 538], legR: [313, 538],   // hips
+};
+
+// ---------- build the rig from the 2D artwork ----------
+function el(name, attrs = {}, ...children) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  node.append(...children);
+  return node;
+}
+async function loadSvg(url) {
+  const text = await (await fetch(url)).text();
+  return new DOMParser().parseFromString(text, 'image/svg+xml');
+}
+// A layer from one of the 2D files, placed in rig coordinates (ids dropped so copies don't clash).
+// It keeps the file's root fill="none", which shapes without their own fill rely on.
+function asset(doc, id) {
+  const node = doc.getElementById(id).cloneNode(true);
+  node.removeAttribute('id');
+  for (const child of node.querySelectorAll('[id]')) child.removeAttribute('id');
+  return el('g', { transform: ASSET_TO_RIG, fill: doc.documentElement.getAttribute('fill') || 'black' }, node);
+}
+const solid = (d) => el('path', { d, fill: 'black', stroke: 'black', 'stroke-width': 6, 'stroke-linejoin': 'round' });
+const whiteLine = (d, width) => el('path', { d, stroke: 'white', 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' });
+
+const [idle, happy] = await Promise.all([loadSvg('assets/images/2D-cat-idle.svg'), loadSvg('assets/images/2D-cat-happy.svg')]);
+
+const parts = {
+  tail: el('g', {}, asset(idle, 'Tail')),
+  legL: el('g', {}, solid(LEGS.L)),
+  legR: el('g', {}, solid(LEGS.R)),
+  armL: el('g'),
+  armR: el('g'),
+  head: el('g'),
+};
+// Each arm has both drawings: arms down (frame 9:189) and the design's arms up. The arm rotates at
+// the shoulder, and shows whichever drawing it's closer to, so Happy Hop shows the exact design.
+const arms = {
+  L: { down: solid(ARMS_DOWN.L), up: asset(idle, 'Arm Up L') },
+  R: { down: solid(ARMS_DOWN.R), up: asset(idle, 'Arm Up R') },
+};
+parts.armL.append(arms.L.down, el('g', {}, arms.L.up));
+parts.armR.append(arms.R.down, el('g', {}, arms.R.up));
+
+const face = {
+  eyesOpen: el('g', {}, asset(idle, 'Eye L'), asset(idle, 'Eye R')),
+  eyesClosed: el('g', {}, asset(happy, 'Closed Eye L'), asset(happy, 'Closed Eye R')),
+  mouthIdle: asset(idle, 'Mouth'),
+  mouthSmile: asset(happy, 'Mouth'),
+  mouthPout: whiteLine(POUT, 8),
+};
+const mark = el('g', {}, whiteLine(angerMarkPath(ANGER_MARK), 6));
+parts.head.append(asset(idle, 'Head'), asset(idle, 'Stitches'), ...Object.values(face), mark);
+
+const root = el('g', {},
+  parts.tail, parts.legL, parts.legR, solid(TORSO), parts.armL, parts.armR, asset(idle, 'Belly'), parts.head);
+const svg = el('svg', { viewBox: '100 0 400 600', role: 'img', 'aria-label': 'Black cat character' },
+  el('image', { href: 'assets/images/cat-shadow.svg', x: 200, y: 556, width: 197, height: 37 }),
+  root);
+document.getElementById('stage').append(svg);
+
+// Which face layers each expression shows (same faces as the 3D cat).
+const FACES = {
+  idle:    ['eyesOpen', 'mouthIdle'],
+  happy:   ['eyesClosed', 'mouthSmile'],
+  mad:     ['eyesClosed', 'mouthPout'],
+  excited: ['eyesOpen', 'mouthSmile'],
+};
+
+// ---------- animation states (identical to the 3D cat) ----------
+// Each state is a function of time (seconds since it started) returning a pose.
+// Pose units: y / headY / leg lifts in design pixels (y up for the jump), rotations in radians,
+// squash as a height multiplier (volume is kept).
+const ARM_UP = 0.56;   // shoulder rotation from "arms down" (frame 9:189, the rest pose) to the design's "arms up" (frame 10:498)
+
+const REST = {
+  y: 0, squash: 1, turn: 0, lean: 0,
+  headY: 0, headTilt: 0,
+  armL: 0, armR: 0, armLFwd: 0, armRFwd: 0,
+  legLx: 0, legLz: 0, legLy: 0, legRx: 0, legRz: 0, legRy: 0,
+  tail: 0, markAlpha: 0, markScale: 1,
+};
+
+const TAU = Math.PI * 2;
+const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
+const easeOut = (v) => 1 - (1 - v) ** 3;
+const easeIn = (v) => v ** 3;
+const easeInOut = (v) => (v < 0.5 ? 4 * v ** 3 : 1 - (-2 * v + 2) ** 3 / 2);
+const span = (t, a, b) => clamp01((t - a) / (b - a));   // 0 → 1 as t goes from a to b
+const lerp = (a, b, v) => a + (b - a) * v;
+
+// Piecewise-linear keyframes: [[time, value], ...]
+function keyframes(frames, t) {
+  for (let i = 1; i < frames.length; i++) {
+    const [t1, v1] = frames[i];
+    if (t <= t1) {
+      const [t0, v0] = frames[i - 1];
+      return lerp(v0, v1, (t - t0) / (t1 - t0));
+    }
+  }
+  return frames[frames.length - 1][1];
+}
+
+// The hop pattern from the Figma motion on frame 9:95 ("cat" node): a 2 s loop with three
+// 24 px hops in the first third (keyframes at 0, 4.863, 10.293, 17.15, 22.678, 28.759, 33.956 %).
+const HOP_LOOP = 2;
+const HOPS = [0, 4.863, 10.293, 17.15, 22.678, 28.759, 33.956, 100].map((p, i) => [p / 100 * HOP_LOOP, [0, 24, 0, 24, 0, 24, 0, 0][i]]);
+
+const STATES = {
+  // Idle: the original idle, with the arms down at the sides (frame 9:189).
+  idle: {
+    label: 'Idle',
+    face: 'idle',
+    pose(t) {
+      const breath = Math.sin(t * 2.2);
+      const armSway = Math.sin(t * 2.2 - 0.3) * 0.035;
+      return {
+        turn: Math.sin(t * 0.6) * 0.45,
+        squash: 1 + breath * 0.008,
+        headY: Math.sin(t * 2.2 - 0.6) * 2.5,
+        headTilt: Math.sin(t * 1.1) * 0.025,
+        armL: armSway,
+        armR: -armSway,
+        tail: Math.sin(t * 2.6) * 0.18,
+      };
+    },
+  },
+
+  // Walk: idle face, arms down and swinging gently side to side together (content), waddling
+  // in place.
+  walk: {
+    label: 'Walk',
+    face: 'idle',
+    pose(t) {
+      const cycle = 0.9;
+      const p = (t / cycle) * TAU;
+      const s = Math.sin(p), c = Math.cos(p);
+      return {
+        turn: 0.5,
+        y: Math.abs(Math.sin(p)) * 5,
+        squash: 1 - Math.abs(Math.cos(p)) * 0.02,
+        lean: s * 0.05,
+        headY: -Math.abs(Math.sin(p)) * 1.5,
+        headTilt: -s * 0.04,
+        armL: s * 0.14,
+        armR: s * 0.14,
+        legLx: s * 0.5,
+        legRx: -s * 0.5,
+        legLy: -Math.max(0, c) * 6,
+        legRy: -Math.max(0, -c) * 6,
+        tail: Math.sin(p + 1) * 0.22,
+      };
+    },
+  },
+
+  // Happy Hop: frame 9:95 exactly — closed happy eyes, smile, the design's arms, and the
+  // Figma hop timing. Nothing added.
+  happy: {
+    label: 'Happy Hop',
+    face: 'happy',
+    pose(t) {
+      return { y: keyframes(HOPS, t % HOP_LOOP), armL: ARM_UP, armR: -ARM_UP };
+    },
+  },
+
+  // Mad Pout: pouting mouth, a throbbing anger mark, arms stiff at the sides, and the same
+  // three-hop bounce as Happy Hop (smaller and stompier).
+  mad: {
+    label: 'Mad Pout',
+    face: 'mad',
+    pose(t) {
+      const lt = t % HOP_LOOP;
+      const hop = keyframes(HOPS, lt) / 24;              // 0..1 using the same hop timing
+      const stomp = Math.sin(hop * Math.PI / 2);
+      // The mark throbs on each landing, then settles.
+      const landings = [HOPS[2][0], HOPS[4][0], HOPS[6][0]];
+      const throb = Math.max(...landings.map((l) => Math.exp(-(((lt - l) * 14) ** 2))));
+      const huff = easeOut(span(t, 0, 0.4));
+      return {
+        y: hop * 12,
+        squash: 1 + stomp * 0.04 - throb * 0.05,
+        turn: -0.32 * huff + Math.sin(t * 1.3) * 0.03,
+        headTilt: 0.06 * huff + Math.sin(t * 9) * 0.01 * (1 - hop),
+        headY: throb * 2,
+        armL: -0.12,
+        armR: 0.12,
+        tail: Math.sin(t * 9) * 0.28,
+        markAlpha: huff,
+        markScale: 1 + throb * 0.22 + Math.sin(t * 6) * 0.03,
+      };
+    },
+  },
+
+  // Excited Jump: crouch, then a big jump where the arms fly from the sides up into the air and
+  // one leg kicks out to the side. Land with a squash, then a short pause.
+  excited: {
+    label: 'Excited Jump',
+    face: 'excited',
+    pose(t) {
+      const lt = t % 1.8;
+      const crouch = easeInOut(span(lt, 0, 0.18)) * (1 - easeOut(span(lt, 0.18, 0.28)));
+      const rise = easeOut(span(lt, 0.2, 0.48));
+      const fall = easeIn(span(lt, 0.48, 0.74));
+      const land = Math.sin(span(lt, 0.74, 1.0) * Math.PI) * (1 - span(lt, 0.74, 1.0) * 0.4);
+      const armsUp = easeOut(span(lt, 0.2, 0.4)) * (1 - easeInOut(span(lt, 0.66, 0.95)));
+      const kick = easeOut(span(lt, 0.26, 0.44)) * (1 - easeInOut(span(lt, 0.56, 0.76)));
+      const air = rise * (1 - fall);
+      // Quick happy flaps while the arms are up (the head is too big for them to go higher).
+      const flap = Math.sin((lt - 0.3) * 30) * 0.1 * armsUp * air;
+      return {
+        y: 64 * air,
+        squash: 1 - crouch * 0.12 + Math.sin(span(lt, 0.2, 0.5) * Math.PI) * 0.08 - land * 0.1,
+        headY: crouch * 4 + land * 3 - Math.sin(span(lt, 0.2, 0.5) * Math.PI) * 3,
+        headTilt: Math.sin(span(lt, 0.2, 0.74) * Math.PI) * -0.05,
+        armL: lerp(0, ARM_UP + 0.14, armsUp) + flap,
+        armR: lerp(0, -ARM_UP - 0.14, armsUp) - flap,
+        armLFwd: armsUp * 0.5,
+        armRFwd: armsUp * 0.5,
+        legRz: -kick * 0.55,
+        legRx: -kick * 0.45,
+        legRy: -kick * 3,
+        tail: Math.sin(lt * 7) * 0.25 + air * 0.3,
+      };
+    },
+  },
+};
+
+// ---------- player: blends between states so every switch is smooth ----------
+const BLEND_TIME = 0.3, FACE_FADE = 0.18;
+const player = { state: 'idle', start: 0, from: { ...REST }, last: { ...REST }, faceFrom: 'idle', faceTo: 'idle', faceMix: 1 };
+
+function play(name, now) {
+  if (!STATES[name] || name === player.state) return;
+  player.from = { ...player.last };
+  player.state = name;
+  player.start = now;
+  player.faceFrom = player.faceMix > 0.5 ? player.faceTo : player.faceFrom;
+  player.faceTo = STATES[name].face;
+  player.faceMix = 0;
+  for (const b of document.querySelectorAll('#states button')) b.setAttribute('aria-pressed', b.dataset.state === name);
+  history.replaceState(null, '', '#' + name);
+}
+
+function samplePose(now) {
+  const t = now - player.start;
+  const target = { ...REST, ...STATES[player.state].pose(t) };
+  const b = easeInOut(clamp01(t / BLEND_TIME));
+  const pose = {};
+  for (const k of Object.keys(REST)) pose[k] = lerp(player.from[k], target[k], b);
+  player.faceMix = clamp01(t / FACE_FADE);
+  player.last = pose;
+  return pose;
+}
+
+// ---------- pose → SVG transforms ----------
+const about = ([x, y], deg) => `rotate(${deg} ${x} ${y})`;
+
+function placeArm(group, { down, up }, angle, raise) {
+  group.setAttribute('transform', about(PIVOTS[group === parts.armL ? 'armL' : 'armR'], angle * DEG));
+  // Past halfway to "arms up", show the design's up-arm drawing, rotated back by ARM_UP.
+  const showUp = angle * raise > ARM_UP / 2;
+  down.style.display = showUp ? 'none' : '';
+  up.parentNode.style.display = showUp ? '' : 'none';
+  up.parentNode.setAttribute('transform', about(PIVOTS[group === parts.armL ? 'armL' : 'armR'], -raise * ARM_UP * DEG));
+}
+
+function placeLeg(group, pivot, lift, angle) {
+  group.setAttribute('transform', `translate(0 ${lift}) ${about(pivot, angle * DEG)}`);
+}
+
+function applyPose(p) {
+  // Whole cat: jump, then squash/stretch and lean about the feet. (turn and the *Fwd / *x swings
+  // are toward/away from the viewer: 3D only.)
+  const [fx, fy] = PIVOTS.feet;
+  const side = 1 / Math.sqrt(p.squash);
+  root.setAttribute('transform',
+    `translate(0 ${-p.y}) translate(${fx} ${fy}) rotate(${-p.lean * DEG}) scale(${side} ${p.squash}) translate(${-fx} ${-fy})`);
+
+  parts.head.setAttribute('transform', `translate(0 ${p.headY}) ${about(PIVOTS.head, p.headTilt * DEG)}`);
+  parts.tail.setAttribute('transform', about(PIVOTS.tail, p.tail * DEG));
+  placeArm(parts.armL, arms.L, p.armL, 1);
+  placeArm(parts.armR, arms.R, p.armR, -1);
+  placeLeg(parts.legL, PIVOTS.legL, p.legLy, p.legLz);
+  placeLeg(parts.legR, PIVOTS.legR, p.legRy, p.legRz);
+
+  const { x, y } = ANGER_MARK;
+  mark.setAttribute('opacity', p.markAlpha);
+  mark.setAttribute('transform', `translate(${x} ${y}) scale(${p.markScale}) translate(${-x} ${-y})`);
+
+  // Cross-fade the face layers between expressions.
+  const from = FACES[player.faceFrom], to = FACES[player.faceTo], m = player.faceMix;
+  for (const [name, layer] of Object.entries(face)) {
+    const opacity = (from.includes(name) ? 1 - m : 0) + (to.includes(name) ? m : 0);
+    layer.setAttribute('opacity', +opacity.toFixed(3));
+  }
+}
+
+// ---------- controls ----------
+const now = () => performance.now() / 1000;
+const nav = document.getElementById('states');
+for (const [name, { label }] of Object.entries(STATES)) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.dataset.state = name;
+  button.setAttribute('aria-pressed', 'false');
+  button.addEventListener('click', () => play(name, now()));
+  nav.appendChild(button);
+}
+// Number keys 1–5 switch states too.
+window.addEventListener('keydown', (e) => {
+  const name = Object.keys(STATES)[Number(e.key) - 1];
+  if (name) play(name, now());
+});
+
+// Start from the URL: #walk plays Walk; #excited@0.4 freezes Excited Jump at 0.4 s (for inspecting a pose).
+const [initial, frozenAt] = location.hash.slice(1).split('@');
+let freeze = frozenAt === undefined ? null : Number(frozenAt);
+let posed = null;   // a hand-set pose (cat.pose) overrides the animation
+player.state = null;
+play(STATES[initial] ? initial : 'idle', freeze === null ? now() : 0);
+if (freeze !== null) player.from = { ...REST, ...STATES[player.state].pose(freeze) };   // no blend-in when frozen
+player.faceFrom = player.faceTo;
+
+// Control from code (e.g. a portfolio page): cat.play('excited'), cat.freeze('walk', 0.3), cat.resume().
+window.cat = {
+  states: Object.keys(STATES),
+  play: (name) => { freeze = null; play(name, now()); },
+  freeze: (name, t) => {
+    player.state = null;
+    play(name, 0);
+    freeze = t;
+    player.from = { ...REST, ...STATES[name].pose(t) };
+    player.faceFrom = player.faceTo;
+  },
+  pose: (p) => { posed = p; },
+  resume: () => { const name = player.state; freeze = null; posed = null; player.state = null; play(name, now()); },
+};
+
+function frame() {
+  applyPose(posed ? { ...REST, ...posed } : samplePose(freeze ?? now()));
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
