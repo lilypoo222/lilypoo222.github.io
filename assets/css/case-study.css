@@ -329,7 +329,7 @@
   line-height: 1.2;
 }
 
-.cs-banner__text p {
+.cs-banner__text > * {
   margin: 0;
   text-box: trim-both cap alphabetic;
 }
