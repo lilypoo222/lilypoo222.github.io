@@ -118,3 +118,79 @@
     img.replaceWith(svg);
   } catch { /* keep the image */ }
 })();
+
+// Notepad nav: drag the paper anywhere on the page. A press only becomes a drag once the pointer
+// has moved a few px, so the links still work with a normal click (and a drag never clicks one).
+// It stays inside the page frame, and keeps its spot as you move between pages during a visit
+// (sessionStorage; a new visit starts it back in its place).
+(() => {
+  const nav = document.querySelector('.notepad-nav');
+  const frame = nav?.closest('.home');
+  if (!nav || !frame) return;
+
+  const KEY = 'notepad-nav-offset';
+  const THRESHOLD = 4;   // px of movement before a press counts as a drag
+  let offset = { x: 0, y: 0 };
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEY));
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) offset = saved;
+  } catch { /* storage unavailable: start in place */ }
+
+  // How far the nav can move from its normal spot and still be fully inside the frame.
+  function limits() {
+    const f = frame.getBoundingClientRect();
+    const n = nav.getBoundingClientRect();
+    const baseLeft = n.left - offset.x, baseTop = n.top - offset.y;
+    return {
+      minX: f.left - baseLeft, maxX: f.right - (baseLeft + n.width),
+      minY: f.top - baseTop, maxY: f.bottom - (baseTop + n.height),
+    };
+  }
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  function place(x, y) {
+    const l = limits();
+    offset = { x: clamp(x, l.minX, l.maxX), y: clamp(y, l.minY, l.maxY) };
+    nav.style.translate = `${offset.x}px ${offset.y}px`;
+  }
+  function save() {
+    try { sessionStorage.setItem(KEY, JSON.stringify(offset)); } catch { /* ignore */ }
+  }
+
+  place(offset.x, offset.y);
+  window.addEventListener('resize', () => place(offset.x, offset.y));
+
+  let press = null;   // { id, x, y, from, dragging }
+  nav.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...offset }, dragging: false };
+  });
+  // Moves and releases are followed on the whole window, so a quick flick that leaves the paper
+  // before the drag starts still drags it.
+  window.addEventListener('pointermove', (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    const dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (!press.dragging) {
+      if (Math.hypot(dx, dy) < THRESHOLD) return;
+      press.dragging = true;
+      nav.classList.add('is-dragging');
+      try { nav.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
+    }
+    place(press.from.x + dx, press.from.y + dy);
+  });
+  const end = (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    if (press.dragging) {
+      nav.classList.remove('is-dragging');
+      save();
+      // The release after a drag shouldn't also follow a link. (The click comes right after
+      // pointerup, so the blocker is removed on the next tick in case no click comes at all.)
+      const block = (c) => { c.preventDefault(); c.stopPropagation(); };
+      nav.addEventListener('click', block, { capture: true, once: true });
+      setTimeout(() => nav.removeEventListener('click', block, { capture: true }), 0);
+    }
+    press = null;
+  };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  nav.addEventListener('dragstart', (e) => e.preventDefault());
+})();

@@ -310,6 +310,23 @@ img {
   max-width: none;
   height: 16.6414em;      /* 532.525 / 32 */
   pointer-events: none;
+  /* A slight drop shadow (the same as the "Click me" sticker's), a little deeper while it's
+     picked up and dragged. */
+  filter: drop-shadow(0 4px 2px rgb(0 0 0 / 0.25));
+  transition: filter 0.2s ease;
+}
+
+/* The notepad can be dragged anywhere on the page (main.js): it sits above the other artwork,
+   and dragging doesn't select text or start the browser's own link/image drag. */
+.notepad-nav {
+  z-index: 3;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.notepad-nav.is-dragging .notepad-nav__paper {
+  filter: drop-shadow(0 12px 8px rgb(0 0 0 / 0.2));
 }
 
 .notepad-nav a {
