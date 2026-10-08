@@ -225,14 +225,14 @@
 /* Figma "header-id" (2197:158): a 1248 × 360 pink (#ef5fa0) panel with a 2px black border and
    12px rounded top corners. Inside: the "landscape_banner" (ground line, ten redwoods and the
    bear, all black at 10% opacity), the white title block at (48, 91), and the phones image at
-   (700.66, 1.93), 470.78 wide. It's 1248 wide when the column allows and shrinks evenly below
-   that: --u is one Figma pixel at the banner's current size (positions are measured inside the
-   2px border, so 1244 wide, and written as Figma x/y − 2). */
+   (700.66, 1.93), 470.78 wide. It spans the full page column, so its edges line up with the
+   "projects" button and the breadcrumb above, and everything scales evenly with it: --u is one
+   Figma pixel at the banner's current size (positions are measured inside the 2px border, so
+   1244 wide, and written as Figma x/y − 2). */
 .cs-banner {
   position: relative;
-  max-width: 1248px;
   aspect-ratio: 1248 / 360;
-  margin: 80px auto 0;
+  margin-top: 80px;
   border: 2px solid #000;
   border-radius: 12px 12px 0 0;
   background: #ef5fa0;
