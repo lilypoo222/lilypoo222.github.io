@@ -6,9 +6,9 @@
    - the text at (41, 109): category (Regular 18), title (Bold 32), a short description
      (Regular 20) and the "see the story →" link (Regular 20, underlined), stacked with Figma's
      gaps (4, 14, 27) so longer or shorter text still flows;
-   - the project's picture (.project-card__image), 221 × 321 at (249.17, 279.31): its visible right
-     edge (197.5px in) ends on the right edge of the 7th gutter of the page grid at 1440 (the card
-     starts on column 4). It can run past the paper's right edge.
+   - the project's picture (.project-card__image), 221 × 321 at (267.17, 279.31): its visible right
+     edge (197.5px in) ends 18px past the right edge of the 7th gutter of the page grid at 1440
+     (the card starts on column 4). It can run past the paper's right edge.
    The paper and tape are shared; each project only brings its text, link and picture.
    "see the story →" is the link into the project. */
 .project-card {
@@ -49,7 +49,7 @@
 }
 
 .project-card__image {
-  left: 249.17px;
+  left: 267.17px;
   top: 279.31px;
   width: 221px;
   height: 321px;
