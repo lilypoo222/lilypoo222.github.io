@@ -122,7 +122,7 @@
 // Notepad nav: drag the paper anywhere on the page. A press only becomes a drag once the pointer
 // has moved a few px, so the links still work with a normal click (and a drag never clicks one).
 // It stays inside the page frame, and keeps its spot as you move between pages during a visit
-// (sessionStorage; a new visit starts it back in its place).
+// (sessionStorage); refreshing the page or a new visit starts it back in its place.
 (() => {
   const nav = document.querySelector('.notepad-nav');
   const frame = nav?.closest('.home');
@@ -132,6 +132,8 @@
   const THRESHOLD = 4;   // px of movement before a press counts as a drag
   let offset = { x: 0, y: 0 };
   try {
+    // Refreshing the page puts it back in its place; going to another page keeps the spot.
+    if (performance.getEntriesByType('navigation')[0]?.type === 'reload') sessionStorage.removeItem(KEY);
     const saved = JSON.parse(sessionStorage.getItem(KEY));
     if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) offset = saved;
   } catch { /* storage unavailable: start in place */ }
