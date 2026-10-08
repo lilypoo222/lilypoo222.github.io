@@ -178,6 +178,8 @@ img {
   min-height: var(--canvas-min-height);
   margin-inline: auto;
   overflow: clip;
+  /* So things inside can size from the frame's width (cqw), e.g. the notepad nav's 2 columns. */
+  container-type: inline-size;
 }
 
 /* .canvas wraps .home: same centred 1440 box, but it doesn't clip, so it can draw the seams
@@ -241,36 +243,39 @@ img {
   pointer-events: none;
 }
 
-/* New nav (Figma "new nav" 2161:1198): the links written on a notepad page. The page is 312 ×
-   527.5 at (60, 421.39) on the 1024 frame; like the cat group, it keeps its distance from the
-   bottom of the frame (top = 100% − 602.61px), so it stays put as the window height changes.
-   Instrument Sans Bold 32px, at Figma's x positions: the four page links centred in a 146px column
-   at x 145 with 24px gaps (first at y 518), "meet the cat" at (120, 828). The current page's link
-   is blue. */
+/* New nav (Figma "new nav" 2161:1198): the links written on a notepad page, scaled down to fill
+   grid columns 1–2 exactly. Figma's drawing is 312 × 527.5 with Instrument Sans Bold 32px; the
+   nav is that drawing scaled to the width of 2 columns + 1 gutter (203.33px on the 1440 frame,
+   narrower on smaller screens, since the columns stretch). Everything inside is in em, so the
+   font size sets the scale: font-size = 32px × (2-column width / 312). Its bottom stays 75.09px
+   above the frame's bottom (as in Figma), so it stays put as the window height changes. Inside
+   (at Figma's 32px scale): the four page links centred in a 146px column at x 85 with 24px gaps
+   (first at y 96.61), "meet the cat" at (60, 406.61). The current page's link is blue. */
 :root {
   --color-nav-current: #2a3ebe;
 }
 
 .notepad-nav {
+  --nav-width: calc((100cqw - 2 * var(--grid-margin) - 11 * var(--grid-gutter)) / 6 + var(--grid-gutter));
   position: absolute;
   left: var(--grid-margin);
-  top: calc(100% - 602.61px);
-  width: 312px;
-  height: 527.525px;
+  top: calc(100% - 75.085px - 16.4852em);
+  width: 9.75em;          /* 312 / 32: = --nav-width */
+  height: 16.4852em;      /* 527.525 / 32 */
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 32px;
+  font-size: calc(var(--nav-width) * 32 / 312);
   line-height: normal;
 }
 
-/* The SVG is 2.5px bigger than the page on every side (its outline stroke). */
+/* The SVG is 2.5px (at 32px) bigger than the page on every side (its outline stroke). */
 .notepad-nav__paper {
   position: absolute;
-  left: -2.5px;
-  top: -2.5px;
-  width: 316.999px;
+  left: -0.078125em;
+  top: -0.078125em;
+  width: 9.90622em;       /* 316.999 / 32 */
   max-width: none;
-  height: 532.525px;
+  height: 16.6414em;      /* 532.525 / 32 */
   pointer-events: none;
 }
 
@@ -327,13 +332,13 @@ img {
 
 .notepad-nav__links {
   position: absolute;
-  left: 85px;
-  width: 146px;
-  top: 96.61px;
+  left: 2.65625em;        /* 85 / 32 */
+  width: 4.5625em;        /* 146 / 32 */
+  top: 3.01906em;         /* 96.61 / 32 */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 0.75em;            /* 24 / 32 */
   margin: 0;
   padding: 0;
   list-style: none;
@@ -341,8 +346,8 @@ img {
 
 .notepad-nav__cat {
   position: absolute;
-  left: 60px;
-  top: 406.61px;
+  left: 1.875em;          /* 60 / 32 */
+  top: 12.7066em;         /* 406.61 / 32 */
 }
 
 /* click_me_sticker (Figma 2168:1838): a 239.72px group at (393.14, 407.14) on the 1024 frame,
