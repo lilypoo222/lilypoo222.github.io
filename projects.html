@@ -9,6 +9,7 @@
   <script src="assets/js/cursor.js" defer></script>
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="stylesheet" href="assets/css/case-study.css">
+  <link rel="stylesheet" href="assets/css/project-card.css">
 </head>
 <body>
   <!-- Projects: placeholder page (not designed yet) with a button into each case study.
@@ -20,9 +21,22 @@
     <main class="container grid" style="padding-top: 48px">
       <div style="grid-column: 4 / -1">
         <h1 class="cs-hero__title">Projects</h1>
-        <p class="cs-top" style="margin-top: 48px; justify-content: flex-start">
-          <a class="cs-top__back" href="projects/mobile-id.html">California Digital Driver’s License →</a>
-        </p>
+
+        <!-- Project card (Figma "case study 01", 2204:536; styles in project-card.css).
+             To add a project, copy this <article> and change: the category, title and description
+             (use <br> for line breaks), the link's href and hidden project name, and the picture
+             (a transparent PNG at 2×, shown 221 × 321 at the card's bottom right). -->
+        <article class="project-card" style="margin-top: 48px">
+          <img class="project-card__paper" src="assets/images/projects/project-card-paper.svg" width="434" height="580" alt="">
+          <img class="project-card__tape" src="assets/images/projects/project-card-tape.svg" width="171" height="80" alt="">
+          <img class="project-card__image" src="assets/images/projects/mobile-id/project-card.png" width="221" height="321" alt="The digital driver’s license app on an iPhone, paperclipped to the page">
+          <div class="project-card__text">
+            <p class="project-card__kind">mobile UI/UX</p>
+            <h2 class="project-card__title">California Digital<br>Driver’s License</h2>
+            <p class="project-card__desc">an exploration of a virtual<br>ID right inside of your phone</p>
+            <a class="project-card__link" href="projects/mobile-id.html">see the story<span class="visually-hidden">: California Digital Driver’s License</span> →</a>
+          </div>
+        </article>
       </div>
     </main>
 

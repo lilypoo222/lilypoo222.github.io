@@ -1,0 +1,108 @@
+/* ---------- Project card ---------- */
+/* Figma "case study 01" (2204:536), the template for every project on the projects page:
+   a 487 × 607 group with
+   - the paper (project-card-paper.svg): 426 × 572 at y 35, cream with a hand-drawn black edge;
+   - the yellow tape (project-card-tape.svg) across its top, darkening what's under it;
+   - the text at (41, 109): category (Regular 18), title (Bold 32), a short description
+     (Regular 20) and the "see the story →" link (Regular 20, underlined), stacked with Figma's
+     gaps (4, 14, 27) so longer or shorter text still flows;
+   - the project's picture (.project-card__image), 221 × 321 at (249.17, 279.31): its visible right
+     edge (197.5px in) ends on the right edge of the 7th gutter of the page grid at 1440 (the card
+     starts on column 4). It can run past the paper's right edge.
+   The paper and tape are shared; each project only brings its text, link and picture.
+   "see the story →" is the link into the project. */
+.project-card {
+  position: relative;
+  width: 487.18px;
+  height: 607px;
+  padding: 109px 0 0 41px;
+  font-family: var(--font-sans);
+  color: #000;
+  /* The artwork sits behind the text (z-index −1) but inside the card. */
+  isolation: isolate;
+}
+
+.project-card__paper,
+.project-card__tape,
+.project-card__image {
+  position: absolute;
+  z-index: -1;
+  max-width: none;
+  pointer-events: none;
+}
+
+/* The SVGs include their outlines' overhang, so they sit a few px up and left of Figma's boxes.
+   The tape is placed to match Figma's render (about 22px of it above the paper's top edge). */
+.project-card__paper {
+  left: -3.73px;
+  top: 31.36px;
+  width: 434px;
+  height: 580px;
+}
+
+.project-card__tape {
+  left: 118.6px;
+  top: -4.25px;
+  width: 171px;
+  height: 80px;
+  mix-blend-mode: darken;
+}
+
+.project-card__image {
+  left: 249.17px;
+  top: 279.31px;
+  width: 221px;
+  height: 321px;
+}
+
+.project-card__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 344px;
+  line-height: normal;
+}
+
+.project-card__text > * {
+  margin: 0;
+}
+
+.project-card__kind {
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.project-card__title {
+  margin-top: 4px;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.project-card__desc {
+  margin-top: 14px;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.project-card__link {
+  margin-top: 27px;
+  font-size: 20px;
+  font-weight: 400;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+}
+
+/* Hovering the link text (or keyboard focus): bold, in the site's blue (the current-page nav
+   colour). */
+.project-card__link:hover,
+.project-card__link:focus-visible {
+  font-weight: 700;
+  color: var(--color-nav-current);
+}
+
+.project-card__link:focus-visible {
+  outline: 2px solid var(--color-nav-current);
+  outline-offset: 4px;
+}
