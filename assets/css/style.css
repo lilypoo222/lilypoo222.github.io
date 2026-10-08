@@ -195,11 +195,26 @@ img {
   --seam-weight: 2px;
 }
 
+/* Paper texture (Adobe Stock 2112880611) multiplied over the canvas colour. The image is greyscale,
+   brightened so the paper's average tone is white: multiplied, the canvas keeps its colour and only
+   the grain shows. The tile is the texture plus a flipped copy, so it repeats down long pages
+   without a seam. It spans the canvas width. --paper-texture-fade (0–1) lays canvas colour back
+   over it to soften the grain. */
+:root {
+  --paper-texture-fade: 0;
+}
+
 .canvas {
   position: relative;
   max-width: var(--canvas-width);
   margin-inline: auto;
-  background: var(--color-canvas);
+  background-color: var(--color-canvas);
+  background-image:
+    linear-gradient(rgb(from var(--color-canvas) r g b / var(--paper-texture-fade)), rgb(from var(--color-canvas) r g b / var(--paper-texture-fade))),
+    image-set(url("../images/paper-texture.jpg") 1x, url("../images/paper-texture@2x.jpg") 2x);
+  background-size: 100% auto;
+  background-repeat: repeat-y;
+  background-blend-mode: normal, multiply;
 }
 
 .canvas::before,
