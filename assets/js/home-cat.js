@@ -24,7 +24,10 @@ const ARMS_DOWN = {
   L: 'M212.863 458.598C226.896 450.831 245.847 443.407 262.143 432V472C250.048 475.456 234.968 479.658 219.482 482.672C214.623 483.617 209.452 484.286 204.896 482.348C200.712 480.567 199.027 477.536 199.842 473.256C201.112 466.589 206.925 461.885 212.863 458.598Z',
   R: 'M386.28 458.598C372.246 450.831 353.296 443.407 337 432V472C349.095 475.456 364.175 479.658 379.661 482.672C384.52 483.617 389.691 484.286 394.246 482.348C398.431 480.567 400.116 477.536 399.301 473.256C398.031 466.589 392.218 461.885 386.28 458.598Z',
 };
-const TORSO = 'M262.143 432H334.143V472L335.86 536H260.43L262.143 472Z';
+// The torso reaches down to the crotch and is outlined only along its sides, so with the grey fill
+// no seam shows where it overlaps the legs (they read as one outline, like the Body layer).
+const TORSO = 'M262.143 432H334.143V472L336.155 547H260.136L262.143 472Z';
+const TORSO_SIDES = 'M260.136 547L262.143 472V432H334.143V472L336.155 547';
 const LEGS = {
   L: 'M260.56 530L260.143 548C260.143 565.333 265.476 574 276.143 574C285.476 574 290.143 566.667 290.143 552C292.6 549.6 295.2 548.3 298.143 548.2V530Z',
   R: 'M298.143 530V548.2C301.1 548.3 303.7 549.6 306.143 552C306.143 566.667 310.809 574 320.143 574C330.809 574 336.143 565.333 336.143 548L335.72 530Z',
@@ -52,7 +55,9 @@ function asset(doc, id) {
   for (const child of node.querySelectorAll('[id]')) child.removeAttribute('id');
   return el('g', { transform: ASSET_TO_RIG, fill: doc.documentElement.getAttribute('fill') || 'black' }, node);
 }
-const solid = (d) => el('path', { d, fill: 'black', stroke: 'black', 'stroke-width': 6, 'stroke-linejoin': 'round' });
+const solid = (d) => el('path', { d, fill: '#1A1A1A', stroke: 'black', 'stroke-width': 6, 'stroke-linejoin': 'round' });
+const torso = () => el('g', {}, el('path', { d: TORSO, fill: '#1A1A1A' }),
+  el('path', { d: TORSO_SIDES, fill: 'none', stroke: 'black', 'stroke-width': 6, 'stroke-linejoin': 'round' }));
 
 function buildRig(idle) {
   const parts = {
@@ -72,7 +77,7 @@ function buildRig(idle) {
   parts.armR.append(arms.R.down, el('g', {}, arms.R.up));
   // Everything below the head, so it can swing from the neck (ragdoll) while the head is held.
   const body = el('g', {},
-    parts.tail, parts.legL, parts.legR, solid(TORSO), parts.armL, parts.armR, asset(idle, 'Belly'));
+    parts.tail, parts.armL, parts.armR, parts.legL, parts.legR, torso(), asset(idle, 'Belly'));
   const root = el('g', {}, body, parts.head);
   // Same box as the <img>: the artwork's bounds in rig coordinates.
   const svg = el('svg', {

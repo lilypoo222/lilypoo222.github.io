@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat Facing Walk (preview)</title>
+  <link rel="icon" href="assets/icons/LDH-logo01.png" type="image/png">
+  <link rel="stylesheet" href="assets/css/cursor.css">
+  <script src="assets/js/cursor.js" defer></script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #ffffff; }
+    body { display: flex; align-items: center; justify-content: center; gap: 80px; font-family: system-ui, sans-serif; }
+    figure { margin: 0; text-align: center; }
+    figcaption { margin-top: 12px; font-size: 14px; color: #6b6b6b; }
+  </style>
+</head>
+<body>
+<!-- Preview only: the facing left / right walk (assets/js/cat-facing-walk.js). Not linked from any page.
+     #freeze@0.3 holds both cats at 0.3 s into the walk; #rest shows them standing still. -->
+<figure id="left"><figcaption>facingLeft</figcaption></figure>
+<figure id="right"><figcaption>facingRight</figcaption></figure>
+<script type="module">
+import { createFacingCat } from './assets/js/cat-facing-walk.js';
+const [mode, at] = location.hash.slice(1).split('@');
+for (const facing of ['left', 'right']) {
+  const cat = await createFacingCat(facing, { shadow: true });
+  document.getElementById(facing).prepend(cat.svg);
+  if (mode === 'freeze') cat.freeze(Number(at) || 0);
+  if (mode === 'rest') cat.stop();
+}
+</script>
+</body>
+</html>
