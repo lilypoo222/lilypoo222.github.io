@@ -242,60 +242,66 @@
 }
 
 /* ---------- Header banner ---------- */
-/* Figma "header-id" (2197:158): a 1248 × 360 pink (#ef5fa0) panel with a 2px black border and
-   12px rounded top corners. Inside: the "landscape_banner" (ground line, ten redwoods and the
-   bear, all black at 10% opacity), the white title block at (48, 91), and the phones image at
-   (700.66, 1.93), 470.78 wide. It spans the full page column, so its edges line up with the
-   "projects" button and the breadcrumb above, and everything scales evenly with it: --u is one
-   Figma pixel at the banner's current size (positions are measured inside the 2px border, so
-   1244 wide, and written as Figma x/y − 2). */
+/* Figma "header-id" (2202:218): a 1248 × 360 pink (#ef5fa0) box with 48px rounded corners and a
+   textured, hand-drawn black outline (header-box.png: the box rendered from Figma at 3×; its
+   outline overhangs the box by 1.25px). Inside: the "landscape_banner" (ground line, ten redwoods
+   and the bear, black, the whole group at 10% opacity), the white title block at (48, 91), and the
+   phones image at (700.66, 1.93), 470.78 wide. It spans the full page column, so its edges line
+   up with the "projects" button and the breadcrumb above, and everything scales evenly with it:
+   --u is one Figma pixel at the banner's current size, and positions are Figma's x/y. */
 .cs-banner {
   position: relative;
   aspect-ratio: 1248 / 360;
   margin-top: 80px;
-  border: 2px solid #000;
-  border-radius: 12px 12px 0 0;
-  background: #ef5fa0;
-  overflow: hidden;
   container-type: inline-size;
 }
 
 .cs-banner > * {
-  --u: calc(100cqi / 1244);
+  --u: calc(100cqi / 1248);
   position: absolute;
   max-width: none;
 }
 
+.cs-banner__box {
+  left: calc(var(--u) * -1.25);
+  top: calc(var(--u) * -1.25);
+  width: calc(var(--u) * 1251);
+  height: calc(var(--u) * 363);
+}
+
+/* The landscape is faded as one layer (10%), as in Figma: everything in it is drawn solid first,
+   so overlapping trees don't get darker and the bear covers what's behind it. */
 .cs-banner__landscape {
   inset: 0;
+  opacity: 0.1;
 }
 
 .cs-banner__landscape > * {
   position: absolute;
   max-width: none;
-  opacity: 0.1;
 }
 
 /* Vector 32 at y 289 (the SVG overhangs its 22px box by 2px for the stroke). */
 .cs-banner__line {
-  left: calc(var(--u) * -2);
-  top: calc(var(--u) * 285.007);
+  left: 0;
+  top: calc(var(--u) * 287.007);
   width: calc(var(--u) * 1248.23);
   height: calc(var(--u) * 25.994);
 }
 
-/* bear at (494.75, 215). */
+/* bear at (494.75, 215). Its SVG is the black bear with a pink band around it, which hides the
+   trees and line behind it once the group is faded. */
 .cs-banner__bear {
-  left: calc(var(--u) * 492.751);
-  top: calc(var(--u) * 213);
+  left: calc(var(--u) * 494.751);
+  top: calc(var(--u) * 215);
   width: calc(var(--u) * 217.103);
   height: calc(var(--u) * 117.23);
 }
 
 /* redwood_images01: one tree image cropped (and stretched) exactly as each Figma layer does. */
 .cs-banner__tree {
-  left: calc(var(--u) * (var(--x) - 2));
-  top: calc(var(--u) * (var(--y) - 2));
+  left: calc(var(--u) * var(--x));
+  top: calc(var(--u) * var(--y));
   overflow: hidden;
 }
 
@@ -319,8 +325,8 @@
 
 /* sidebyside_wGlass 3: a 470.78 × 356.15 box showing the phones image cropped as in Figma. */
 .cs-banner__phones {
-  left: calc(var(--u) * 698.66);
-  top: calc(var(--u) * -0.07);
+  left: calc(var(--u) * 700.66);
+  top: calc(var(--u) * 1.93);
   width: calc(var(--u) * 470.78);
   height: calc(var(--u) * 356.15);
   overflow: hidden;
@@ -338,8 +344,8 @@
 /* Instrument Sans, white: "case study" Regular 20 (lowercase), the title Bold 40, the line
    under it Regular 20; 24px apart, each trimmed to cap height and baseline as in Figma. */
 .cs-banner__text {
-  left: calc(var(--u) * 46);
-  top: calc(var(--u) * 89);
+  left: calc(var(--u) * 48);
+  top: calc(var(--u) * 91);
   width: calc(var(--u) * 456.39);
   display: flex;
   flex-direction: column;
