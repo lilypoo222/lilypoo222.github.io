@@ -78,6 +78,26 @@
   background: var(--cs-butter);
 }
 
+/* In the top bar, the back link is plain text like the breadcrumb opposite it: same Instrument
+   Sans Bold 16px and grey, blue on hover. */
+.cs-top > .cs-top__back {
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--cs-muted);
+}
+
+.cs-top > .cs-top__back svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cs-top > .cs-top__back:hover {
+  color: var(--color-nav-current);
+}
+
 .cs-top__crumbs {
   display: flex;
   gap: 10px;
