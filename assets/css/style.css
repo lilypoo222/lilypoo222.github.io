@@ -106,6 +106,10 @@
 
   /* Typography (Figma collection "typography": size-xxl → --typography-size-xxl) */
   --typography-size-xxl: 128px;
+
+  /* Space above the hero (the logo starts here). The "Click me" sticker and the paper grain on
+     the logo follow it. */
+  --hero-top: 40px;
 }
 
 /* Base styles */
@@ -402,7 +406,7 @@ img {
 
 /* click_me_sticker (Figma 2168:1838): a 239.72px group, top right of the frame. The pink circle
    (39.86px into the group) starts on column 11 and its top lines up with the top of the hero
-   text (y 48, where the capitals start): column 11 begins at 83.33% − 23.33px of the 1440 grid
+   block (--hero-top, where the logo starts): column 11 begins at 83.33% − 23.33px of the 1440 grid
    (60px margins, 20px gutters), so the group sits 39.86px up and left of that. The sticker: a
    160px pink (#ef5fa0) circle with an 8px black border and a soft drop shadow, the cat face
    (cat-sticker.svg) centred and tilted 8.13°. "Click me!" (Instrument Sans Bold 24px) runs along
@@ -418,7 +422,7 @@ img {
 .cat-sticker {
   position: absolute;
   left: calc(83.3333% - 63.19px);
-  top: 8.14px;
+  top: calc(var(--hero-top) - 39.86px);
   width: 239.72px;
   height: 239.72px;
   pointer-events: none;
@@ -739,7 +743,7 @@ img {
     )
   );
   position: relative;
-  padding-top: 48px;
+  padding-top: var(--hero-top);
   /* Lets the hero text size itself from the grid's real width (cqi), not the window's. */
   container-type: inline-size;
 }
@@ -779,7 +783,7 @@ img {
 /* The paper texture over the ink: the canvas's own texture, inverted and brightened, screened
    over the letters, so the paper's fibres show as faint light grain in the black (over the cream
    paper it adds next to nothing). Sized and positioned like the canvas background (canvas width =
-   this section's width + its 60px margins; the logo sits 60px in and 48px down), so the grain
+   this section's width + its 60px margins; the logo sits 60px in and --hero-top down), so the grain
    lines up with the paper around it. --wordmark-grain sets how strong it is. */
 .wordmark::after {
   --wordmark-grain: 4;
@@ -787,7 +791,7 @@ img {
   position: absolute;
   inset: 0;
   background: image-set(url("../images/paper-texture.jpg") 1x, url("../images/paper-texture@2x.jpg") 2x)
-    calc(-1 * var(--grid-margin)) -48px / calc(100cqi + 2 * var(--grid-margin)) auto repeat-y;
+    calc(-1 * var(--grid-margin)) calc(-1 * var(--hero-top)) / calc(100cqi + 2 * var(--grid-margin)) auto repeat-y;
   filter: invert(1) brightness(var(--wordmark-grain));
   mix-blend-mode: screen;
   pointer-events: none;
