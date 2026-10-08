@@ -383,11 +383,13 @@ img {
   top: 12.7066em;         /* 406.61 / 32 */
 }
 
-/* click_me_sticker (Figma 2168:1838): a 239.72px group at (393.14, 407.14) on the 1024 frame,
-   kept the same distance from the bottom as the nav. The sticker: a 160px pink (#ef5fa0) circle
-   with an 8px black border and a soft drop shadow, the cat face (cat-sticker.svg) centred and
-   tilted 8.13°. "Click me!" (Instrument Sans Bold 24px) runs along a 228px circle around it.
-   The text is hidden until you hover the sticker, then writes itself on along the circle: it
+/* click_me_sticker (Figma 2168:1838): a 239.72px group, top right of the frame. The pink circle
+   (39.86px into the group) starts on column 11 and its top lines up with the top of the hero
+   text (y 48, where the capitals start): column 11 begins at 83.33% − 23.33px of the 1440 grid
+   (60px margins, 20px gutters), so the group sits 39.86px up and left of that. The sticker: a
+   160px pink (#ef5fa0) circle with an 8px black border and a soft drop shadow, the cat face
+   (cat-sticker.svg) centred and tilted 8.13°. "Click me!" (Instrument Sans Bold 24px) runs along
+   a 228px circle around it. The text is hidden until you hover the sticker, then writes itself on along the circle: it
    slides round into place while a sweep reveals it from the "C" to the "!". Only the sticker
    itself is the hover/click target. */
 @property --sticker-reveal {
@@ -398,8 +400,8 @@ img {
 
 .cat-sticker {
   position: absolute;
-  left: calc(25% + 33.14px);
-  top: calc(100% - 616.86px);
+  left: calc(83.3333% - 63.19px);
+  top: 8.14px;
   width: 239.72px;
   height: 239.72px;
   pointer-events: none;
