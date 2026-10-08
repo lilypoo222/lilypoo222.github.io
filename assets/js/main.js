@@ -121,50 +121,89 @@
 
 // Notepad nav: drag the paper anywhere on the page. A press only becomes a drag once the pointer
 // has moved a few px, so the links still work with a normal click (and a drag never clicks one).
-// It stays inside the page frame, and keeps its spot as you move between pages during a visit
-// (sessionStorage); refreshing the page or a new visit starts it back in its place.
+// It stays inside the page frame. Its spot on the page is kept as you move between pages during a
+// visit (sessionStorage), so it sits in the same place on every page; refreshing the page or a
+// new visit starts it back in its place.
+// Until it's been moved, a page can ask for it to stay clear of its content: with
+// data-clear-of="main" it starts on the first grid column to the right of everything in <main>
+// (projects.html), at its usual height.
 (() => {
   const nav = document.querySelector('.notepad-nav');
   const frame = nav?.closest('.home');
   if (!nav || !frame) return;
 
-  const KEY = 'notepad-nav-offset';
+  const KEY = 'notepad-nav-spot';
   const THRESHOLD = 4;   // px of movement before a press counts as a drag
-  let offset = { x: 0, y: 0 };
+  let offset = { x: 0, y: 0 };   // current translate from its CSS position
+  let spot = null;               // where the user put it (left/top in the frame), once moved
   try {
     // Refreshing the page puts it back in its place; going to another page keeps the spot.
     if (performance.getEntriesByType('navigation')[0]?.type === 'reload') sessionStorage.removeItem(KEY);
     const saved = JSON.parse(sessionStorage.getItem(KEY));
-    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) offset = saved;
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) spot = saved;
   } catch { /* storage unavailable: start in place */ }
 
-  // How far the nav can move from its normal spot and still be fully inside the frame.
-  function limits() {
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  // The nav's CSS position (without our translate) and size, and the frame's size.
+  function measure() {
     const f = frame.getBoundingClientRect();
     const n = nav.getBoundingClientRect();
-    const baseLeft = n.left - offset.x, baseTop = n.top - offset.y;
-    return {
-      minX: f.left - baseLeft, maxX: f.right - (baseLeft + n.width),
-      minY: f.top - baseTop, maxY: f.bottom - (baseTop + n.height),
-    };
+    return { x: n.left - f.left - offset.x, y: n.top - f.top - offset.y, w: n.width, h: n.height, fw: f.width, fh: f.height, f };
   }
-  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-  function place(x, y) {
-    const l = limits();
-    offset = { x: clamp(x, l.minX, l.maxX), y: clamp(y, l.minY, l.maxY) };
+  // Move it so its top-left is at (x, y) in the frame, kept fully inside.
+  function placeAt(x, y) {
+    const m = measure();
+    const px = clamp(x, 0, m.fw - m.w), py = clamp(y, 0, m.fh - m.h);
+    offset = { x: px - m.x, y: py - m.y };
     nav.style.translate = `${offset.x}px ${offset.y}px`;
+    return { x: px, y: py };
+  }
+  // Where it starts when it hasn't been moved.
+  function home() {
+    const m = measure();
+    const selector = nav.dataset.clearOf;
+    if (!selector) return { x: m.x, y: m.y };
+    // The right edge of what you can see in the content: its pictures (including ones that hang
+    // outside their boxes) and the text itself (not the boxes around it, which can be as wide as
+    // the page). Then the next grid column after a gutter's gap.
+    let right = 0;
+    const take = (r) => { if (r.width && r.height) right = Math.max(right, r.right - m.f.left); };
+    for (const root of frame.querySelectorAll(selector)) {
+      for (const el of root.querySelectorAll('img, svg, video, canvas')) take(el.getBoundingClientRect());
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        if (!t.textContent.trim() || t.parentElement.closest('.visually-hidden')) continue;
+        range.selectNodeContents(t);
+        take(range.getBoundingClientRect());
+      }
+    }
+    const css = getComputedStyle(document.documentElement);
+    const margin = parseFloat(css.getPropertyValue('--grid-margin')) || 60;
+    const gutter = parseFloat(css.getPropertyValue('--grid-gutter')) || 20;
+    const columns = parseFloat(css.getPropertyValue('--grid-columns')) || 12;
+    const step = (m.fw - 2 * margin - (columns - 1) * gutter) / columns + gutter;
+    const column = Math.max(0, Math.ceil((right + gutter - margin) / step));
+    return { x: margin + column * step, y: m.y };
+  }
+  function settle() {
+    const target = spot ?? home();
+    placeAt(target.x, target.y);
   }
   function save() {
-    try { sessionStorage.setItem(KEY, JSON.stringify(offset)); } catch { /* ignore */ }
+    try { sessionStorage.setItem(KEY, JSON.stringify(spot)); } catch { /* ignore */ }
   }
 
-  place(offset.x, offset.y);
-  window.addEventListener('resize', () => place(offset.x, offset.y));
+  settle();
+  new ResizeObserver(settle).observe(frame);   // the frame changes size with the window
+  // Pictures in the content can change its width once they load.
+  window.addEventListener('load', () => { if (!spot) settle(); });
 
   let press = null;   // { id, x, y, from, dragging }
   nav.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    press = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...offset }, dragging: false };
+    const m = measure();
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { x: m.x + offset.x, y: m.y + offset.y }, dragging: false };
   });
   // Moves and releases are followed on the whole window, so a quick flick that leaves the paper
   // before the drag starts still drags it.
@@ -177,7 +216,7 @@
       nav.classList.add('is-dragging');
       try { nav.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
     }
-    place(press.from.x + dx, press.from.y + dy);
+    spot = placeAt(press.from.x + dx, press.from.y + dy);
   });
   const end = (e) => {
     if (!press || e.pointerId !== press.id) return;
