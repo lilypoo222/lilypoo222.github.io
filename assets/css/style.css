@@ -727,67 +727,93 @@ img {
   container-type: inline-size;
 }
 
-/* myName (Figma 2208:542): the "lilydeedesign" wordmark above the hero text, Instrument Sans at
-   the hero's size (128px on the 1440 canvas): "lily" and "dee" Bold, "design" Regular, set solid
-   with no spaces, so the change of weight does the separating. Trimmed to cap height and
-   baseline like Figma (92px tall at 128), 48px above the hero text, the same as the space above
-   it. On load the three words rise into place one after another. */
+/* myName (Figma 2208:542): the "lilydeedesign" wordmark above the hero text, used like a logo:
+   "lily" and "dee" Bold, "design" Regular, set solid. It's the Figma export's outlines
+   (assets/images/wordmark.svg) inline, with the viewBox cropped to the ink, so the letters span
+   exactly columns 1–2 of the grid at every width (about 203 × 32 on the 1440 canvas). Its
+   baseline sits 48px above the hero text (the descenders hang into that space), and its top is
+   at y 48, the same as the space above.
+   On load each word draws on like After Effects' trim paths: a thin black outline traces every
+   letter (one after another, as each word is one path; the three words start a beat apart), then
+   the ink fills in and the outline fades. */
 .wordmark {
+  --wordmark-columns: 2;
+  /* The logo's width (its ink), and its descender: the part below the baseline, 0.0352 of the
+     width (14.95 of 424.23 in the SVG). */
+  --wordmark-width: calc(
+    var(--wordmark-columns) * (100cqi - (var(--grid-columns) - 1) * var(--grid-gutter)) / var(--grid-columns)
+      + (var(--wordmark-columns) - 1) * var(--grid-gutter)
+  );
   grid-column: 1 / span var(--hero-columns);
-  margin: 0 0 48px;
-  font-family: var(--font-sans);
-  font-size: var(--hero-size);
-  line-height: 1.2;
-  white-space: nowrap;
-  color: #000;
-  text-box: trim-both cap alphabetic;
-  position: relative;
   justify-self: start;
+  position: relative;
+  width: var(--wordmark-width);
+  margin: 0 0 calc(48px - var(--wordmark-width) * 0.0352);
+  line-height: 0;
 }
 
-/* The paper texture over the ink: the canvas's own texture, inverted and brightened,
-   screened over the letters, so the paper's fibres show as faint light grain in the black
-   (over the cream paper it adds next to nothing). Sized and positioned like the canvas background
-   (canvas width = this section's width + its 60px margins; the wordmark sits 60px in and 48px
-   down, and the overlay starts 0.15em above it to cover the "l"s), so the grain lines up with the
-   paper around it. --wordmark-grain sets how strong it is. */
+.wordmark__logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* The paper texture over the ink: the canvas's own texture, inverted and brightened, screened
+   over the letters, so the paper's fibres show as faint light grain in the black (over the cream
+   paper it adds next to nothing). Sized and positioned like the canvas background (canvas width =
+   this section's width + its 60px margins; the logo sits 60px in and 48px down), so the grain
+   lines up with the paper around it. --wordmark-grain sets how strong it is. */
 .wordmark::after {
   --wordmark-grain: 4;
   content: "";
   position: absolute;
-  inset: -0.15em 0 -0.3em;
+  inset: 0;
   background: image-set(url("../images/paper-texture.jpg") 1x, url("../images/paper-texture@2x.jpg") 2x)
-    calc(-1 * var(--grid-margin)) calc(0.15em - 48px) / calc(100cqi + 2 * var(--grid-margin)) auto repeat-y;
+    calc(-1 * var(--grid-margin)) -48px / calc(100cqi + 2 * var(--grid-margin)) auto repeat-y;
   filter: invert(1) brightness(var(--wordmark-grain));
   mix-blend-mode: screen;
   pointer-events: none;
 }
 
+/* Trim-paths draw-on: each word's outline is one dash as long as the path (pathLength 1), pushed
+   off by its full length and then pulled back to 0; the fill comes in as it finishes. The stroke
+   is ~1px on screen (2 units at about half size). */
 .wordmark__word {
-  display: inline-block;
-  animation: wordmark-in 0.9s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  fill: transparent;
+  stroke: #000;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation:
+    wordmark-draw 1.6s cubic-bezier(0.45, 0, 0.25, 1) forwards,
+    wordmark-fill 0.5s ease-out 1.35s forwards;
 }
 
-.wordmark__word--bold {
-  font-weight: 700;
+.wordmark__word--dee {
+  animation-delay: 0.25s, 1.6s;
 }
 
-.wordmark__word--regular {
-  font-weight: 400;
+.wordmark__word--design {
+  animation-delay: 0.5s, 1.85s;
 }
 
-.wordmark__word:nth-child(3) { animation-delay: 0.12s; }
-.wordmark__word:nth-child(4) { animation-delay: 0.24s; }
+@keyframes wordmark-draw {
+  to { stroke-dashoffset: 0; }
+}
 
-@keyframes wordmark-in {
-  from {
-    opacity: 0;
-    translate: 0 0.3em;
+@keyframes wordmark-fill {
+  to {
+    fill: #000;
+    stroke-opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wordmark__word {
+    fill: #000;
+    stroke: none;
     animation: none;
   }
 }
